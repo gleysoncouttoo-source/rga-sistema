@@ -1,0 +1,31 @@
+{
+  "name": "rga-sistema",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "db:push": "prisma db push",
+    "db:seed": "node prisma/seed.mjs",
+    "setup": "prisma db push && node prisma/seed.mjs",
+    "postinstall": "prisma generate",
+    "vercel-build": "prisma db push --skip-generate && node prisma/seed.mjs && next build"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "bcryptjs": "3.0.3",
+    "fflate": "^0.8.2",
+    "next": "15.5.29",
+    "react": "19.1.10",
+    "react-dom": "19.1.10",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.3",
+    "@types/react": "19.1.2",
+    "@types/react-dom": "19.1.2",
+    "prisma": "6.19.3",
+    "typescript": "5.8.3"
+  }
+}

@@ -1,0 +1,613 @@
+// Sistema R.G.A — banco de dados
+// Banco Postgres (na nuvem: Neon pela Vercel). DATABASE_URL = conexão com pool; DATABASE_URL_UNPOOLED = direta.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+// Perfil de acesso: define os módulos e ações permitidos
+model Perfil {
+  id         Int       @id @default(autoincrement())
+  nome       String    @unique
+  // JSON: { "funcionarios": ["ver","criar","editar"], ... }
+  permissoes String
+  usuarios   Usuario[]
+  criadoEm   DateTime  @default(now())
+}
+
+model Usuario {
+  id            Int          @id @default(autoincrement())
+  nome          String
+  email         String       @unique
+  senhaHash     String
+  perfilId      Int
+  perfil        Perfil       @relation(fields: [perfilId], references: [id])
+  setor         String? // setor do qual recebe lembretes
+  whatsapp      String?
+  ativo         Boolean      @default(true)
+  tentativas    Int          @default(0)
+  bloqueadoAte  DateTime?
+  funcionarioId Int?         @unique
+  funcionario   Funcionario? @relation(fields: [funcionarioId], references: [id])
+  abasOcultas   String? // JSON: abas que este login escolheu esconder do menu
+  sessoes       Sessao[]
+  criadoEm      DateTime     @default(now())
+}
+
+model Sessao {
+  id        String   @id
+  usuarioId Int
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  expiraEm  DateTime
+  criadoEm  DateTime @default(now())
+}
+
+model Funcionario {
+  id                Int                @id @default(autoincrement())
+  chavePix          String?
+  matricula         String?            @unique
+  nome              String
+  cpf               String?            @unique
+  rg                String?
+  nascimento        DateTime?
+  telefone          String?
+  endereco          String?
+  contatoEmergencia String?
+  cargo             String // Diretor, Gestor, Funcionário
+  setor             String? // Estamparia, Injeção...
+  tipoContrato      String             @default("CLT")
+  turno             String?
+  admissao          DateTime?
+  desligamento      DateTime?
+  salario           Float? // R$ por mês (campo sensível)
+  encargosPct       Float? // encargos e provisões deste colaborador (% sobre o salário); vazio = % padrão da tela de Custos
+  beneficios        Float? // benefícios e outros custos fixos por mês (VT, VR, plano...)
+  pinHash           String? // PIN para apontar produção pelo celular
+  ativo             Boolean            @default(true)
+  observacoes       String?
+  usuario           Usuario?
+  apontamentos      Apontamento[]
+  recordes          Recorde[]
+  contas            ContaPagar[]
+  processos         ProcessoProducao[]
+  criadoEm          DateTime           @default(now())
+  atualizadoEm      DateTime           @updatedAt
+}
+
+model Etapa {
+  id        Int        @id @default(autoincrement())
+  nome      String     @unique
+  ordem     Int        @default(0)
+  operacoes Operacao[]
+}
+
+model Operacao {
+  id                Int            @id @default(autoincrement())
+  etapaId           Int
+  etapa             Etapa          @relation(fields: [etapaId], references: [id])
+  nome              String // processo / peça
+  porLote           Boolean        @default(false)
+  pecasPorLote      Int?
+  // recorde atual = menor tempo por peça (em segundos) confirmado
+  recordeSegPorPeca Float?
+  ativo             Boolean        @default(true)
+  observacao        String?
+  apontamentos      Apontamento[]
+  recordes          Recorde[]
+  pecas             ItemOperacao[]
+  passos            Passo[]
+
+  @@unique([etapaId, nome])
+}
+
+model Apontamento {
+  id            Int               @id @default(autoincrement())
+  funcionarioId Int
+  funcionario   Funcionario       @relation(fields: [funcionarioId], references: [id])
+  operacaoId    Int
+  operacao      Operacao          @relation(fields: [operacaoId], references: [id])
+  data          DateTime          @default(now())
+  quantidade    Int // peças boas
+  refugo        Int               @default(0)
+  minutos       Float // tempo trabalhado
+  segPorPeca    Float // minutos*60 / quantidade
+  // custo da hora do funcionário no momento do apontamento (congelado)
+  custoHora     Float?
+  custoPorPeca  Float?
+  recorde       Recorde?
+  // v1.0: produção seguindo o processo da peça
+  itemId        Int?
+  item          Item?             @relation(fields: [itemId], references: [id])
+  passoId       Int?
+  passo         Passo?            @relation(fields: [passoId], references: [id])
+  loteId        Int?
+  lote          Lote?             @relation(fields: [loteId], references: [id])
+  inicio        DateTime? // cronômetro: início e fim
+  fim           DateTime?
+  usuario       String? // login que lançou (vazio = operador pelo celular)
+  processo      ProcessoProducao?
+}
+
+model Recorde {
+  id            Int          @id @default(autoincrement())
+  operacaoId    Int
+  operacao      Operacao     @relation(fields: [operacaoId], references: [id])
+  funcionarioId Int?
+  funcionario   Funcionario? @relation(fields: [funcionarioId], references: [id])
+  apontamentoId Int?         @unique
+  apontamento   Apontamento? @relation(fields: [apontamentoId], references: [id])
+  segPorPeca    Float
+  status        String       @default("pendente") // pendente, confirmado, recusado, inicial
+  criadoEm      DateTime     @default(now())
+  decididoPor   String?
+  decididoEm    DateTime?
+}
+
+model Configuracao {
+  chave String @id
+  valor String
+}
+
+model Auditoria {
+  id       Int      @id @default(autoincrement())
+  usuario  String
+  acao     String
+  detalhe  String?
+  criadoEm DateTime @default(now())
+}
+
+// ───────────── Estoque, estrutura do produto, vendas e compras ─────────────
+
+// Tudo o que a fábrica guarda: produto pronto, peça (fabricada ou comprada) e matéria-prima.
+// Item com estrutura (componentes) é fabricado/montado; item sem estrutura é comprado.
+model Item {
+  id             Int                @id @default(autoincrement())
+  codigo         String?            @unique
+  nome           String
+  tipo           String // produto, conjunto, peca, materia_prima, insumo
+  origem         String             @default("comprado") // fabricado (produz/monta aqui) ou comprado
+  setor          String? // setor que produz (Estamparia, Injeção...) — itens fabricados
+  precoVenda     Float? // valor de venda (produto)
+  unidade        String             @default("un") // un, kg, m, L
+  estoque        Float              @default(0) // saldo físico
+  estoqueMinimo  Float              @default(0)
+  diasFabricacao Int                @default(2) // dias para produzir/montar (itens com estrutura)
+  // compra
+  fornecedorId   Int?
+  fornecedor     Fornecedor?        @relation(fields: [fornecedorId], references: [id])
+  precoCompra    Float? // preço atual do fornecedor (R$ por unidade)
+  loteMinimo     Float? // quantidade mínima de compra
+  ativo          Boolean            @default(true)
+  observacao     String?
+  componentes    Componente[]       @relation("pai")
+  usadoEm        Componente[]       @relation("filho")
+  reservas       Reserva[]
+  movimentos     MovimentoEstoque[]
+  vendas         PedidoVendaItem[]
+  compras        PedidoCompraItem[]
+  necessidades   Necessidade[]
+  precos         PrecoHistorico[]
+  anuncios       AnuncioCanal[]
+  operacoes      ItemOperacao[]
+  // v1.0
+  foto           String? // miniatura (imagem em data URL, ~320 px)
+  material       String? // matéria-prima: aço, zamac, latão...
+  pesoUnitKg     Float? // matéria-prima contada em unidades (chapa, barra): peso de 1 unidade em kg
+  dimensoes      String? // espessura / medidas da chapa
+  passos         Passo[]
+  lotes          Lote[]
+  apontamentos   Apontamento[]
+  processos      ProcessoProducao[]
+  criadoEm       DateTime           @default(now())
+}
+
+// Estrutura: quanto de cada componente vai em 1 unidade do item pai
+model Componente {
+  id         Int   @id @default(autoincrement())
+  paiId      Int
+  pai        Item  @relation("pai", fields: [paiId], references: [id], onDelete: Cascade)
+  filhoId    Int
+  filho      Item  @relation("filho", fields: [filhoId], references: [id])
+  quantidade Float
+
+  @@unique([paiId, filhoId])
+}
+
+model MovimentoEstoque {
+  id            Int      @id @default(autoincrement())
+  itemId        Int
+  item          Item     @relation(fields: [itemId], references: [id])
+  quantidade    Float // + entrada, − saída
+  motivo        String // ajuste, compra recebida, pedido entregue...
+  apontamentoId Int? // movimento gerado pela produção (desfeito se o apontamento for excluído)
+  usuario       String?
+  criadoEm      DateTime @default(now())
+}
+
+// Quantidade separada do estoque para um pedido de venda (não pode ser usada por outro pedido)
+model Reserva {
+  id            Int         @id @default(autoincrement())
+  itemId        Int
+  item          Item        @relation(fields: [itemId], references: [id])
+  pedidoVendaId Int
+  pedidoVenda   PedidoVenda @relation(fields: [pedidoVendaId], references: [id], onDelete: Cascade)
+  quantidade    Float
+  criadoEm      DateTime    @default(now())
+}
+
+model Fornecedor {
+  id               Int              @id @default(autoincrement())
+  nome             String
+  chavePix         String?
+  banco            String? // dados para transferência
+  cnpj             String?
+  contato          String?
+  telefone         String?
+  email            String?
+  prazoPagamento   String           @default("28") // dias após a compra, uma parcela por número: "28" ou "28/42/56"
+  prazoEntregaDias Int              @default(7) // dias entre a compra e a chegada
+  ativo            Boolean          @default(true)
+  observacao       String?
+  itens            Item[]
+  pedidos          PedidoCompra[]
+  precos           PrecoHistorico[]
+  boletos          ContaPagar[]
+  criadoEm         DateTime         @default(now())
+}
+
+model PedidoVenda {
+  id           Int               @id @default(autoincrement())
+  numero       String? // número do pedido no site
+  origem       String            @default("manual") // manual, site, shopee
+  // vendas de marketplace (Shopee): situação lá, comprador e valores do pedido
+  canalStatus  String? // a_enviar, enviado, concluido, cancelado, devolvido
+  comprador    String?
+  valorPago    Float? // total pago pelo comprador (com frete)
+  taxas        Float? // comissão + serviço + transação
+  cliente      String
+  dataPedido   DateTime          @default(now())
+  dataEntrega  DateTime
+  // aberto → (analisado) → entregue / cancelado
+  status       String            @default("aberto")
+  // resumo da análise: pronto (tudo em estoque), produzir, comprar
+  situacao     String?
+  observacao   String?
+  itens        PedidoVendaItem[]
+  reservas     Reserva[]
+  necessidades Necessidade[]
+  compras      PedidoCompra[]
+  recebimentos ContaReceber[]
+  criadoEm     DateTime          @default(now())
+}
+
+model PedidoVendaItem {
+  id            Int         @id @default(autoincrement())
+  pedidoVendaId Int
+  pedidoVenda   PedidoVenda @relation(fields: [pedidoVendaId], references: [id], onDelete: Cascade)
+  itemId        Int
+  item          Item        @relation(fields: [itemId], references: [id])
+  quantidade    Float
+  precoUnitario Float?
+  anuncio       String? // nome do anúncio na Shopee (para o lucro por anúncio)
+  anuncioId     String? // ID do produto na Shopee (item_id), quando vem pela API
+}
+
+// Resultado da análise do pedido: para cada item da estrutura, quanto sai do estoque, quanto produzir e quanto comprar
+model Necessidade {
+  id            Int         @id @default(autoincrement())
+  pedidoVendaId Int
+  pedidoVenda   PedidoVenda @relation(fields: [pedidoVendaId], references: [id], onDelete: Cascade)
+  itemId        Int
+  item          Item        @relation(fields: [itemId], references: [id])
+  nivel         Int // 0 = produto vendido, 1 = peças, 2 = matéria-prima...
+  ordem         Int // ordem de exibição (árvore)
+  necessario    Float
+  doEstoque     Float
+  aFabricar     Float // montar / produzir
+  aComprar      Float
+  precisaEm     DateTime // data em que o item precisa estar disponível
+  aviso         String?
+}
+
+model PedidoCompra {
+  id               Int                @id @default(autoincrement())
+  fornecedorId     Int? // vazio = item sem fornecedor cadastrado
+  fornecedor       Fornecedor?        @relation(fields: [fornecedorId], references: [id])
+  pedidoVendaId    Int?
+  pedidoVenda      PedidoVenda?       @relation(fields: [pedidoVendaId], references: [id])
+  // sugerido (lançado pelo sistema) → aprovado (enviado ao fornecedor) → recebido / cancelado
+  status           String             @default("sugerido")
+  dataCompra       DateTime // melhor data para comprar
+  dataLimite       DateTime // última data para comprar sem atrasar a entrega
+  chegadaPrevista  DateTime
+  prazoEntregaDias Int? // prazo combinado nesta compra (vazio = do fornecedor)
+  urgente          Boolean            @default(false)
+  motivo           String? // explicação da data escolhida
+  automatico       Boolean            @default(true)
+  itens            PedidoCompraItem[]
+  boletos          ContaPagar[]
+  criadoEm         DateTime           @default(now())
+  decididoPor      String?
+  recebidoEm       DateTime?
+  notaFiscal       String?
+  obsRecebimento   String?
+}
+
+model PedidoCompraItem {
+  id                 Int          @id @default(autoincrement())
+  pedidoCompraId     Int
+  pedidoCompra       PedidoCompra @relation(fields: [pedidoCompraId], references: [id], onDelete: Cascade)
+  itemId             Int
+  item               Item         @relation(fields: [itemId], references: [id])
+  quantidade         Float // quantidade comprada (pode ser arredondada pelo lote mínimo)
+  necessaria         Float // quantidade que o pedido de venda precisa
+  precoUnitario      Float?
+  quantidadeRecebida Float?
+  precoPago          Float? // preço real na nota
+}
+
+// Contas a pagar / boletos. "previsto" = vem de um pedido de compra ainda não aprovado.
+model ContaPagar {
+  id             Int              @id @default(autoincrement())
+  favorecido     String? // quem recebe (se diferente do fornecedor)
+  formaPagamento String? // boleto, pix, transferência, dinheiro, débito
+  codigoBarras   String? // linha digitável do boleto
+  chavePix       String?
+  descricao      String
+  categoria      String           @default("Fornecedor") // Fornecedor, Colaboradores, Condomínio, Energia, Impostos, Outras
+  observacao     String?
+  recorrenteId   Int?
+  recorrente     ContaRecorrente? @relation(fields: [recorrenteId], references: [id], onDelete: SetNull)
+  funcionarioId  Int?
+  funcionario    Funcionario?     @relation(fields: [funcionarioId], references: [id])
+  competencia    String? // AAAA-MM das contas geradas todo mês
+  fornecedorId   Int?
+  fornecedor     Fornecedor?      @relation(fields: [fornecedorId], references: [id])
+  pedidoCompraId Int?
+  pedidoCompra   PedidoCompra?    @relation(fields: [pedidoCompraId], references: [id], onDelete: Cascade)
+  vencimento     DateTime
+  valor          Float
+  parcela        String? // "1/3"
+  banco          String? // Santander, Bradesco
+  status         String           @default("aberto") // previsto, aberto, pago
+  pagoEm         DateTime?
+  criadoEm       DateTime         @default(now())
+
+  @@unique([recorrenteId, competencia])
+  @@unique([funcionarioId, competencia])
+  @@index([vencimento])
+}
+
+// Todo preço pago ou cotado: base do histórico 30/60/90 dias e do recorde de menor preço
+model PrecoHistorico {
+  id             Int         @id @default(autoincrement())
+  itemId         Int
+  item           Item        @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  fornecedorId   Int?
+  fornecedor     Fornecedor? @relation(fields: [fornecedorId], references: [id])
+  preco          Float
+  data           DateTime
+  origem         String // planilha, compra, cotação
+  pedidoCompraId Int?
+  usuario        String?
+  criadoEm       DateTime    @default(now())
+
+  @@index([itemId, data])
+}
+
+// Conta que se repete todo mês (condomínio, aluguel, energia, contador...). O sistema lança a conta de cada mês sozinho.
+model ContaRecorrente {
+  id         Int          @id @default(autoincrement())
+  descricao  String
+  categoria  String
+  valor      Float
+  dia        Int // dia do vencimento (1 a 31) ou, se diaUtil, o N-ésimo dia útil
+  diaUtil    Boolean      @default(false)
+  banco      String?
+  ativo      Boolean      @default(true)
+  observacao String?
+  contas     ContaPagar[]
+  criadoEm   DateTime     @default(now())
+}
+
+// Saldo de cada conta do banco (Bradesco, Santander) — ponto de partida do fluxo de caixa
+model ContaBancaria {
+  id            Int      @id @default(autoincrement())
+  nome          String   @unique
+  saldo         Float    @default(0)
+  atualizadoEm  DateTime @default(now())
+  atualizadoPor String?
+}
+
+// Dinheiro a receber: clientes, vendas no site (Shopee etc.), serviços
+model ContaReceber {
+  id            Int          @id @default(autoincrement())
+  descricao     String // cliente / origem
+  categoria     String       @default("Vendas")
+  valor         Float
+  vencimento    DateTime
+  banco         String?
+  status        String       @default("aberto") // aberto, recebido, cancelado
+  recebidoEm    DateTime?
+  parcela       String?
+  observacao    String?
+  pedidoVendaId Int?
+  pedidoVenda   PedidoVenda? @relation(fields: [pedidoVendaId], references: [id], onDelete: SetNull)
+  criadoEm      DateTime     @default(now())
+
+  @@index([vencimento])
+}
+
+// Anúncio de marketplace (Shopee) ligado a um produto do estoque. "fator" = fechaduras por venda (kit com 2 = 2).
+model AnuncioCanal {
+  id        Int      @id @default(autoincrement())
+  canal     String   @default("shopee")
+  chave     String // SKU do anúncio ou "nome | variação"
+  descricao String?
+  itemId    Int
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  fator     Float    @default(1)
+  criadoEm  DateTime @default(now())
+
+  @@unique([canal, chave])
+}
+
+// Planilha de pedidos enviada (Shopee). Guarda os pedidos lidos até a confirmação da importação.
+model ImportacaoVenda {
+  id          Int       @id @default(autoincrement())
+  canal       String    @default("shopee")
+  arquivo     String
+  dados       Json
+  resumo      String?
+  status      String    @default("lida") // lida, importada
+  usuario     String?
+  criadoEm    DateTime  @default(now())
+  importadoEm DateTime?
+}
+
+// Recorde de vendas (melhor dia/semana/mês, total, por canal ou por produto). Fica pendente até gestor/diretor confirmar.
+model RecordeVenda {
+  id          Int      @id @default(autoincrement())
+  tipo        String // dia, semana, mes
+  metrica     String // faturamento, unidades
+  escopo      String // total, canal:shopee, item:12
+  periodo     String // 2026-11-05, 2026-11-01 (domingo da semana), 2026-11
+  valor       Float
+  status      String   @default("confirmado") // confirmado, recusado
+  decididoPor String?
+  decididoEm  DateTime @default(now())
+
+  @@index([tipo, metrica, escopo])
+}
+
+// Ligação automática com a loja na Shopee (API oficial). Uma loja só (id = 1). As chaves do app ficam nas variáveis de ambiente.
+model ShopeeConexao {
+  id              Int       @id @default(1)
+  shopId          String
+  nomeLoja        String?
+  accessToken     String
+  refreshToken    String
+  expiraEm        DateTime // o acesso vale 4 horas e é renovado sozinho
+  conectadoPor    String?
+  conectadoEm     DateTime  @default(now())
+  ultimaSync      DateTime? // até quando os pedidos já foram conferidos
+  ultimoResultado String?
+  erro            String?
+  baixarEnviados  Boolean   @default(true) // pedidos que chegam já enviados dão baixa no estoque
+}
+
+// Relatório dos Anúncios Shopee (Ads) de um período: gasto, vendas pelos anúncios, ROAS
+model AdsRelatorio {
+  id       Int        @id @default(autoincrement())
+  arquivo  String
+  de       DateTime // dia inicial (meio-dia UTC)
+  ate      DateTime // dia final
+  usuario  String?
+  linhas   AdsLinha[]
+  criadoEm DateTime   @default(now())
+}
+
+model AdsLinha {
+  id          Int          @id @default(autoincrement())
+  relatorioId Int
+  relatorio   AdsRelatorio @relation(fields: [relatorioId], references: [id], onDelete: Cascade)
+  anuncio     String
+  produtoId   String?
+  impressoes  Float        @default(0)
+  cliques     Float        @default(0)
+  itens       Float        @default(0) // itens vendidos pelos Ads
+  vendas      Float        @default(0) // GMV dos Ads
+  gasto       Float        @default(0)
+}
+
+// Quais operações de produção fazem cada peça (para somar a mão de obra no custo do produto)
+model ItemOperacao {
+  id         Int      @id @default(autoincrement())
+  itemId     Int
+  item       Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  operacaoId Int
+  operacao   Operacao @relation(fields: [operacaoId], references: [id], onDelete: Cascade)
+  porUnidade Float    @default(1) // vezes que a operação é feita por peça
+  sugerida   Boolean  @default(false) // ligada automaticamente pelo nome (conferir)
+
+  @@unique([itemId, operacaoId])
+}
+
+// ───────────── v1.0: processo de cada peça, lotes, cronômetro e histórico de alterações ─────────────
+
+// Passo do processo de uma peça/produto (ex.: Espelho L.O → 1 Estampa, 2 Pintura, 3 Lixa, 4 Verniz).
+// Cada passo usa uma Operação (que guarda o recorde e entra no custo de mão de obra).
+model Passo {
+  id           Int                @id @default(autoincrement())
+  itemId       Int
+  item         Item               @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  ordem        Int
+  operacaoId   Int
+  operacao     Operacao           @relation(fields: [operacaoId], references: [id])
+  observacao   String?
+  apontamentos Apontamento[]
+  processos    ProcessoProducao[]
+  criadoEm     DateTime           @default(now())
+
+  @@index([itemId, ordem])
+}
+
+// Lote: um grupo de peças que segue o processo junto (ex.: 1.500 espelhos estampados → pintura → lixa → verniz).
+model Lote {
+  id           Int                @id @default(autoincrement())
+  numero       String             @unique // L-0001
+  itemId       Int
+  item         Item               @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  planejado    Float? // quantidade prevista
+  // lote aberto já com peças prontas até um passo (peças que já estavam na fábrica antes do sistema)
+  entradaOrdem Int?
+  entradaQtd   Float?
+  status       String             @default("aberto") // aberto, concluido, cancelado
+  criadoPor    String?
+  criadoEm     DateTime           @default(now())
+  concluidoEm  DateTime?
+  apontamentos Apontamento[]
+  processos    ProcessoProducao[]
+}
+
+// Processo em andamento (cronômetro ligado). Ao finalizar vira um Apontamento.
+model ProcessoProducao {
+  id            Int          @id @default(autoincrement())
+  itemId        Int
+  item          Item         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  passoId       Int
+  passo         Passo        @relation(fields: [passoId], references: [id], onDelete: Cascade)
+  loteId        Int
+  lote          Lote         @relation(fields: [loteId], references: [id], onDelete: Cascade)
+  funcionarioId Int
+  funcionario   Funcionario  @relation(fields: [funcionarioId], references: [id])
+  inicio        DateTime     @default(now())
+  pausadoEm     DateTime?
+  segPausado    Float        @default(0)
+  status        String       @default("andamento") // andamento, concluido
+  apontamentoId Int?         @unique
+  apontamento   Apontamento? @relation(fields: [apontamentoId], references: [id], onDelete: SetNull)
+  iniciadoPor   String?
+}
+
+// Histórico de alterações: cada campo alterado, com o login e o horário
+model Alteracao {
+  id         Int      @id @default(autoincrement())
+  usuario    String
+  acao       String // criou, alterou, excluiu
+  tabela     String // Item, Funcionario...
+  registroId String
+  registro   String? // nome do registro na hora
+  campo      String?
+  antes      String?
+  depois     String?
+  criadoEm   DateTime @default(now())
+
+  @@index([tabela, registroId])
+  @@index([criadoEm])
+}
