@@ -24,6 +24,13 @@ const perfis = {
     produtos: ["ver", "criar", "editar"],
     historico: ["ver"],
   },
+  // para quem cria a conta pela tela "Criar conta" como colaborador; o diretor ainda escolhe as abas ao liberar
+  Colaborador: {
+    painel: ["ver"],
+    producao: ["ver", "criar"],
+    produtos: ["ver"],
+    estoque: ["ver"],
+  },
 };
 // módulos novos: entram nos perfis que já existem sem mexer no que foi personalizado
 const NOVOS = ["vendas", "estoque", "compras", "financeiro", "produtos", "historico"];

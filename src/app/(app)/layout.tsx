@@ -12,7 +12,7 @@ async function acaoSair() {
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const u = await usuarioAtual();
   if (!u) redirect("/login");
-  const itens = abasDoUsuario(u.permissoes, u.abasOcultas).filter((a) => !a.oculta).map((a) => ({ href: a.href, nome: a.nome }));
+  const itens = abasDoUsuario(u.permissoes, u.abasOcultas, u.liberadas).filter((a) => !a.oculta).map((a) => ({ href: a.href, nome: a.nome }));
   return (
     <div className="app">
       <nav className="lateral">

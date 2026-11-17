@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { usuarioAtual } from "@/lib/auth";
-import { pode } from "@/lib/permissoes";
+import { abaLiberada, abasDoUsuario, pode } from "@/lib/permissoes";
 import { brl, num } from "@/lib/formato";
 import { gerarContasMensais, diaDoPagamento } from "@/lib/financeiro";
 import { chave, dia, somaDias } from "@/lib/datas";
@@ -11,6 +11,20 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
   const u = await usuarioAtual();
   if (!u) redirect("/login");
   const sp = await searchParams;
+  const semPermissao = sp["sem-permissao"] && <div className="aviso erro">Seu login não tem acesso a essa parte do sistema. Se precisar, peça para um diretor liberar.</div>;
+  if (!abaLiberada(u.liberadas, "painel")) {
+    const abas = abasDoUsuario(u.permissoes, u.abasOcultas, u.liberadas).filter((a) => !a.oculta);
+    return (
+      <>
+        <h1>Olá, {u.nome.split(" ")[0]}</h1>
+        {semPermissao}
+        <div className="card">
+          <b>Suas áreas</b>
+          <p className="acoes" style={{ marginTop: 12, marginBottom: 0 }}>{abas.map((a) => <Link key={a.id} href={a.href} className="btn sec">{a.nome}</Link>)}</p>
+        </div>
+      </>
+    );
+  }
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const veFin = pode(u.permissoes, "financeiro");
   if (veFin) await gerarContasMensais();
@@ -27,13 +41,17 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
     db.contaPagar.findMany({ where: { status: "aberto", vencimento: { gte: somaDias(hojeD, -3), lte: somaDias(hojeD, 1) } } }),
   ]);
   const [rodando, lotesAbertos] = await Promise.all([db.processoProducao.count({ where: { status: "andamento" } }), db.lote.count({ where: { status: "aberto" } })]);
+  const cadastrosPendentes = pode(u.permissoes, "usuarios", "editar") ? await db.usuario.count({ where: { pendente: true } }) : 0;
   const pagarHoje = contasHoje.filter((c) => chave(diaDoPagamento(c.vencimento)) === chave(hojeD));
   const pecas = apsHoje.reduce((s, a) => s + a.quantidade, 0);
   const refugo = apsHoje.reduce((s, a) => s + a.refugo, 0);
   return (
     <>
       <h1>Olá, {u.nome.split(" ")[0]}</h1>
-      {sp["sem-permissao"] && <div className="aviso erro">Seu perfil não tem acesso a essa parte do sistema.</div>}
+      {semPermissao}
+      {cadastrosPendentes > 0 && (
+        <div className="aviso alerta">{cadastrosPendentes} pessoa(s) criaram conta e estão esperando liberação. <Link href="/usuarios">Liberar acesso</Link></div>
+      )}
       <div className="grade">
         <div className="kpi"><div className="r">Funcionários ativos</div><div className="v">{num(funcs)}</div></div>
         <div className="kpi"><div className="r">Peças boas hoje</div><div className="v">{num(pecas)}</div><div className="r">{num(apsHoje.length)} apontamento(s)</div></div>

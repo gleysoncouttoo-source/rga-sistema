@@ -16,7 +16,7 @@ Base do sistema da fábrica: login com perfis, cadastro de funcionários, aponta
 - Processos iniciais carregados: testa, contra-testa, caixa, tampa, lingueta, trinco, tambor, cilindro, espelhos, maçanetas 900/902/905, montagem dos corpos e montagem final dos 48 produtos. **Conferir**: espelho P.T (estampa → polimento → banho de zinco) e maçanetas foram montados pelas operações da planilha de julho; peças pequenas (cadeiras, travas, chaves…) e maçaneta 904 ainda sem processo.
 
 ## O que já funciona
-- **Login e perfis**: Diretor e Gestor, com permissões por módulo e ação editáveis em *Usuários e perfis*. Limite de 4 logins ativos. Bloqueio após 5 senhas erradas. Registro de atividades.
+- **Login e perfis**: Diretor, Gestor e Colaborador, com permissões por módulo e ação editáveis em *Usuários e perfis*. Qualquer pessoa cria a conta em `/cadastro` (nome, e-mail, cargo, senha); ela só entra depois que um diretor libera, escolhendo o cargo e quais abas pode abrir (ou todas). Bloqueio após 5 senhas erradas. Registro de atividades.
 - **Funcionários**: cadastro sem limite (dados pessoais, contrato, salário, PIN do celular).
 - **Produção**: etapas e operações carregadas da planilha de julho; a meta de cada operação é o recorde (menor tempo por peça). Novos recordes ficam pendentes até um Diretor ou Gestor confirmar.
 - **Apontar produção** (`/apontar`, feito para celular): o operador escolhe o nome e a operação, informa peças boas, refugo e minutos, e confirma com o PIN.

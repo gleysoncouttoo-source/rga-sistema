@@ -25,6 +25,9 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
           <button className="btn">Entrar</button>
         </form>
         <p className="suave" style={{ marginTop: 18 }}>
+          Ainda não tem login? <a href="/cadastro">Criar conta</a>
+        </p>
+        <p className="suave">
           Operador da produção? <a href="/apontar">Registrar produção</a>
         </p>
       </div>

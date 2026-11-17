@@ -35,6 +35,9 @@ model Usuario {
   funcionarioId Int?         @unique
   funcionario   Funcionario? @relation(fields: [funcionarioId], references: [id])
   abasOcultas   String? // JSON: abas que este login escolheu esconder do menu
+  abasLiberadas String? // JSON: abas que o diretor liberou para este login (vazio = todas que o perfil permite)
+  pendente      Boolean      @default(false) // criou a conta pela tela Criar conta e espera liberação
+  cargoPedido   String? // cargo que a pessoa informou ao criar a conta
   sessoes       Sessao[]
   criadoEm      DateTime     @default(now())
 }

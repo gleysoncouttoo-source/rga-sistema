@@ -35,10 +35,37 @@ export function lerAbasOcultas(json: string | null | undefined): string[] {
   try { const v = JSON.parse(json || "[]"); return Array.isArray(v) ? v.map(String) : []; } catch { return []; }
 }
 
-/** Abas que o login pode ver (pelo perfil), marcando as que ele escondeu. */
-export function abasDoUsuario(p: Permissoes, ocultasJson: string | null | undefined) {
+/** Abas liberadas pelo diretor. null = todas as que o perfil permite. */
+export function lerAbasLiberadas(json: string | null | undefined): string[] | null {
+  if (!json) return null;
+  try { const v = JSON.parse(json); return Array.isArray(v) ? v.map(String) : null; } catch { return null; }
+}
+
+export function abaLiberada(liberadas: string[] | null, abaId: string) {
+  return liberadas == null || liberadas.includes(abaId);
+}
+
+/** Tira do perfil os módulos que não têm nenhuma aba liberada para este login. */
+export function limitarPermissoes(p: Permissoes, liberadas: string[] | null): Permissoes {
+  if (liberadas == null) return p;
+  const modulos = new Set<string>(ABAS.filter((a) => a.modulo && liberadas.includes(a.id)).map((a) => a.modulo as string));
+  return Object.fromEntries(Object.entries(p).filter(([m]) => modulos.has(m)));
+}
+
+/** A aba a que um endereço pertence (ex.: /vendas/shopee/3 → vendas). */
+export function abaDoCaminho(caminho: string) {
+  let melhor: (typeof ABAS)[number] | null = null;
+  for (const a of ABAS) {
+    const casa = a.href === "/" ? caminho === "/" : caminho === a.href || caminho.startsWith(a.href + "/");
+    if (casa && (!melhor || a.href.length > melhor.href.length)) melhor = a;
+  }
+  return melhor;
+}
+
+/** Abas que o login pode ver (pelo perfil e pelo que o diretor liberou), marcando as que ele escondeu. */
+export function abasDoUsuario(p: Permissoes, ocultasJson: string | null | undefined, liberadas: string[] | null = null) {
   const ocultas = lerAbasOcultas(ocultasJson);
-  return ABAS.filter((a) => a.modulo == null || pode(p, a.modulo as Modulo)).map((a) => ({ ...a, oculta: ocultas.includes(a.id) }));
+  return ABAS.filter((a) => abaLiberada(liberadas, a.id) && (a.modulo == null || pode(p, a.modulo as Modulo))).map((a) => ({ ...a, oculta: ocultas.includes(a.id) }));
 }
 
 // Módulos previstos no plano, ainda não construídos

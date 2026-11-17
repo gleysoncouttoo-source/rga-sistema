@@ -40,8 +40,8 @@ export default async function Conta({ searchParams }: { searchParams: Promise<{ 
       </div>
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Abas do menu</h2>
-        <p className="suave">Marque as abas que você quer ver no menu. Esconder uma aba não tira o acesso: o que cada login pode fazer continua sendo definido pelo perfil.</p>
-        <EscolherAbas id={u.id} abas={abasDoUsuario(u.permissoes, u.abasOcultas)} volta="/conta" />
+        <p className="suave">Marque as abas que você quer ver no menu. Esconder uma aba não tira o acesso. Quais abas você pode abrir é o diretor quem libera, em Usuários e perfis.</p>
+        <EscolherAbas id={u.id} abas={abasDoUsuario(u.permissoes, u.abasOcultas, u.liberadas)} volta="/conta" />
       </div>
     </>
   );
