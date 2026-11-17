@@ -16,7 +16,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="app">
       <nav className="lateral">
-        <div className="marca"><span className="logo">RGA</span><span>R.G.A</span></div>
+        <a href="/" className="marca" aria-label="R.G.A — início">
+          <img src="/marca/logo-claro.png" alt="R.G.A" />
+          <small>Indústria e Ferramentaria de Precisão</small>
+        </a>
         <Nav itens={itens} />
         <div className="rotulo">Em breve</div>
         {MODULOS_FUTUROS.map((m) => (

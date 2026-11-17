@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { auditar, entrar } from "@/lib/auth";
+import MarcaCentro from "@/components/MarcaCentro";
 
 // Cria o primeiro login (perfil Diretor). Só funciona enquanto não existe nenhum login no sistema.
 async function criar(form: FormData) {
@@ -24,6 +25,7 @@ export default async function PrimeiroAcesso({ searchParams }: { searchParams: P
   const { erro } = await searchParams;
   return (
     <main className="centro">
+      <MarcaCentro />
       <div className="caixa card">
         <h1>Primeiro acesso</h1>
         <p className="suave">Crie o login do primeiro diretor. Depois, os outros logins são criados em Usuários e perfis.</p>

@@ -6,6 +6,7 @@ import { Erro, dadosNovoProcesso, finalizarCronometro, iniciarCronometro, lancar
 import { dataHora, num } from "@/lib/formato";
 import NovoProcesso from "@/components/NovoProcesso";
 import Cronometro from "@/components/Cronometro";
+import MarcaCentro from "@/components/MarcaCentro";
 
 // Tentativas de PIN erradas por funcionário (em memória; zera ao reiniciar o servidor)
 const falhas = new Map<number, { n: number; ate: number }>();
@@ -119,6 +120,7 @@ export default async function Apontar({
   const ph = Number(sp.ph), rec = Number(sp.rec);
   return (
     <main className="centro">
+      <MarcaCentro />
       <div className="caixa card" style={{ maxWidth: 560 }}>
         <h1>Registrar produção</h1>
         {sp.erro && <div className="aviso erro">{sp.erro}</div>}

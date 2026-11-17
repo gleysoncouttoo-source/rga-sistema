@@ -171,13 +171,13 @@ export default async function Metricas({ searchParams }: { searchParams: Promise
             return (
               <div key={m} title={`${nomePeriodo("mes", m)}: ${brl(v, 0)} · ${num(un)} un${rec ? " · recorde" : ""}`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%", minWidth: 0 }}>
                 <div className="suave" style={{ fontSize: ".7rem", whiteSpace: "nowrap" }}>{v ? (rec ? "🏆 " : "") + num(v / 1000, 1) + "k" : ""}</div>
-                <div style={{ width: "70%", maxWidth: 36, height: `${(v / maxMes) * 140}px`, minHeight: v ? 3 : 0, background: m === hoje.slice(0, 7) ? "#8FB3A0" : "var(--pri)", borderRadius: "4px 4px 0 0" }} />
+                <div style={{ width: "70%", maxWidth: 36, height: `${(v / maxMes) * 140}px`, minHeight: v ? 3 : 0, background: m === hoje.slice(0, 7) ? "var(--acento)" : "var(--pri)", borderRadius: "4px 4px 0 0" }} />
                 <div className="suave" style={{ fontSize: ".7rem", marginTop: 4 }}>{nomePeriodo("mes", m).split(" ")[0].replace(".", "")}</div>
               </div>
             );
           })}
         </div>
-        <p className="suave" style={{ marginBottom: 0 }}>Mês atual em verde mais claro (ainda em andamento). Passe o mouse para ver o valor e as unidades.</p>
+        <p className="suave" style={{ marginBottom: 0 }}>Mês atual em amarelo (ainda em andamento). Passe o mouse para ver o valor e as unidades.</p>
       </div>
 
       {canais.length > 1 && !canal && (

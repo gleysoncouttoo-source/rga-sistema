@@ -50,7 +50,7 @@ export default async function Funcionarios({ searchParams }: { searchParams: Pro
             const ant = antes(r);
             const ganho = ant ? (ant / r.segPorPeca - 1) * 100 : null;
             return (
-              <div className="card" key={r.id} style={{ borderLeft: "5px solid #C98A1B" }}>
+              <div className="card" key={r.id} style={{ borderLeft: "5px solid var(--acento)" }}>
                 <div className="topo" style={{ marginBottom: 6 }}>
                   <b style={{ fontSize: "1.05rem" }}>{r.funcionario!.nome}</b>
                   <span className={`selo ${r.status === "confirmado" ? "ok" : "alerta"}`}>{r.status === "confirmado" ? "confirmado" : "a confirmar"}</span>
