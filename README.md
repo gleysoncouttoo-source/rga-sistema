@@ -49,6 +49,8 @@ Base do sistema da fábrica: login com perfis, cadastro de funcionários, aponta
 Configurações (tabela Configuracao): `folgaCompraDias` (2), `maxBoletosDia` (2, a partir daí o dia aparece como cheio), `prazoEntregaPadrao` (10 dias, quando o pedido vem sem data).
 
 ## Colocar online (Vercel + Neon)
+No ar desde 17/11/2026: https://rga-sistema.vercel.app (Vercel, banco Neon `rga-banco`). Cada envio para a branch `main` publica sozinho.
+
 1. Importe o repositório do GitHub em vercel.com/new.
 2. No projeto da Vercel, vá em **Storage → Create → Neon (Postgres)** e conecte ao projeto. Isso cria `DATABASE_URL` e `DATABASE_URL_UNPOOLED`.
 3. Faça um novo deploy. O script `vercel-build` cria as tabelas, faz a carga inicial e compila.
