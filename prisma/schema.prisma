@@ -59,6 +59,7 @@ model Funcionario {
   rg                String?
   nascimento        DateTime?
   telefone          String?
+  email             String? // recebe o comprovante de pagamento
   endereco          String?
   contatoEmergencia String?
   cargo             String // Diretor, Gestor, Funcionário
@@ -366,8 +367,6 @@ model ContaPagar {
   contaRecebedor String?
   documento      String? // CPF ou CNPJ de quem recebe
   notaFiscal     String? // número da nota a que o pagamento se refere
-  emailContato   String? // para onde mandar o comprovante (se não usar o do fornecedor)
-  whatsContato   String?
   comprovantes   Comprovante[]
   descricao      String
   categoria      String           @default("Fornecedor") // Fornecedor, Colaboradores, Condomínio, Energia, Impostos, Outras

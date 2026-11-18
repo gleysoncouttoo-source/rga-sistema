@@ -54,7 +54,7 @@ async function adicionar(form: FormData) {
     formaPagamento: txt(form, "forma"), codigoBarras: txt(form, "codigo")?.replace(/[^0-9]/g, "") || null,
     chavePix: txt(form, "pix") ?? forn?.chavePix ?? null, favorecido: txt(form, "favorecido") ?? forn?.nome ?? null,
     bancoRecebedor: txt(form, "bancoRec") ?? forn?.banco ?? null, agencia: txt(form, "agencia"), contaRecebedor: txt(form, "contaRec"), documento: txt(form, "documento") ?? forn?.cnpj ?? null,
-    notaFiscal: txt(form, "nota"), emailContato: txt(form, "emailContato"), whatsContato: txt(form, "whatsContato"),
+    notaFiscal: txt(form, "nota"),
   };
   const repetir = form.get("repetir") === "mensal";
   const parcelas = Math.min(60, Math.max(1, Number(form.get("parcelas")) || 1));
@@ -95,7 +95,7 @@ async function acaoConta(form: FormData) {
         formaPagamento: txt(form, "forma"), favorecido: txt(form, "favorecido"), chavePix: txt(form, "pix"),
         codigoBarras: txt(form, "codigo")?.replace(/[^0-9]/g, "") || null, observacao: txt(form, "obs"),
         bancoRecebedor: txt(form, "bancoRec"), agencia: txt(form, "agencia"), contaRecebedor: txt(form, "contaRec"), documento: txt(form, "documento"),
-        notaFiscal: txt(form, "nota"), emailContato: txt(form, "emailContato"), whatsContato: txt(form, "whatsContato"),
+        notaFiscal: txt(form, "nota"),
       },
     });
   }
@@ -237,8 +237,6 @@ export default async function Financeiro({ searchParams }: { searchParams: Promi
             <label>Agência<input name="agencia" inputMode="numeric" /></label>
             <label>Conta<input name="contaRec" placeholder="ex.: 12345-6" /></label>
             <label>Nota fiscal<input name="nota" placeholder="nº da nota" /></label>
-            <label>E-mail de quem recebe<input name="emailContato" type="email" placeholder="para mandar o comprovante" /></label>
-            <label>WhatsApp de quem recebe<input name="whatsContato" inputMode="tel" placeholder="para mandar o comprovante" /></label>
             <label className="inteiro">Observação<input name="obs" /></label>
             <div className="inteiro acoes"><button className="btn">Salvar</button><a className="btn sec" href={`${url}#dia`}>Cancelar</a></div>
           </form>
@@ -361,8 +359,6 @@ export default async function Financeiro({ searchParams }: { searchParams: Promi
                         <label>Agência<input name="agencia" defaultValue={c.agencia ?? ""} /></label>
                         <label>Conta<input name="contaRec" defaultValue={c.contaRecebedor ?? ""} /></label>
                         <label>Nota fiscal<input name="nota" defaultValue={c.notaFiscal ?? ""} /></label>
-                        <label>E-mail de quem recebe<input name="emailContato" type="email" defaultValue={c.emailContato ?? ""} /></label>
-                        <label>WhatsApp de quem recebe<input name="whatsContato" inputMode="tel" defaultValue={c.whatsContato ?? ""} /></label>
                         <label className="inteiro">Observação<input name="obs" defaultValue={c.observacao ?? ""} /></label>
                         <div className="inteiro"><button className="btn peq">Salvar</button></div>
                       </form>

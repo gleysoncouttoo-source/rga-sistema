@@ -15,6 +15,7 @@ export default function FormFuncionario({
       <label>RG<input name="rg" defaultValue={f?.rg ?? ""} /></label>
       <label>Nascimento<input name="nascimento" type="date" defaultValue={d(f?.nascimento)} /></label>
       <label>Telefone / WhatsApp<input name="telefone" defaultValue={f?.telefone ?? ""} /></label>
+      <label>E-mail<input name="email" type="email" defaultValue={f?.email ?? ""} placeholder="recebe o comprovante de pagamento" /></label>
       <label>Chave Pix (para pagamento)<input name="chavePix" defaultValue={f?.chavePix ?? ""} /></label>
       <label className="inteiro">Endereço<input name="endereco" defaultValue={f?.endereco ?? ""} /></label>
       <label className="inteiro">Contato de emergência<input name="contatoEmergencia" defaultValue={f?.contatoEmergencia ?? ""} /></label>
