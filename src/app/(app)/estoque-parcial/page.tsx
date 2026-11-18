@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { auditar, exigir } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
+import { DetalheEtapas, SelosEtapa, type EtapaPos } from "@/components/EtapasProcesso";
 import PartesConjunto, { type LinhaParte } from "@/components/PartesConjunto";
 import IrPara from "@/components/IrPara";
 import { saldosLotes } from "@/lib/fluxo";
@@ -97,17 +98,21 @@ export default async function EstoqueParcial({ searchParams }: { searchParams: P
       if (prox > 0) espera[prox - 1].qtd += x.aguardando;
     }
     const total = espera.slice(0, -1).reduce((s, e) => s + e.qtd, 0);
-    return { i, espera, total, lotes: ls.length, andamento: espera.reduce((s, e) => s + e.andamento, 0) };
+    // em qual processo estão: as que saíram do processo k esperam o k+1; as rodando estão no próprio processo
+    const N = i.passos.length;
+    const etapas: EtapaPos[] = i.passos.map((p, k) => ({
+      pos: k + 1, total: N, nome: p.operacao.nome,
+      aguardando: k > 0 ? espera[k - 1].qtd : 0, rodando: espera[k].andamento,
+    })).filter((e) => e.aguardando > 0 || e.rodando > 0);
+    const processo = i.passos.map((p) => p.operacao.nome);
+    return { i, espera, total, etapas, processo, lotes: ls.length, andamento: espera.reduce((s, e) => s + e.andamento, 0) };
   });
   const ver = sp.ver === "partes" || sp.ver === "conjuntos" ? sp.ver : "tudo";
   const totalPecas = linhas.reduce((s, l) => s + l.total, 0);
   const monta = pode(u.permissoes, "producao", "criar");
   const conjMontar = itens.filter((i) => i.tipo === "conjunto").map((i) => ({ id: i.id, nome: i.nome, estrutura: i.componentes.map((c) => ({ filhoId: c.filhoId, quantidade: c.quantidade })) }));
-  const partesLinhas: LinhaParte[] = linhas.filter((l) => l.i.tipo === "peca").map(({ i, espera, total, andamento }) => ({
-    id: i.id, codigo: i.codigo, nome: i.nome, foto: i.foto, estoque: i.estoque, emProcesso: total, andamento,
-    onde: total > 0
-      ? espera.slice(0, -1).filter((e) => e.qtd > 0).map((e) => `${num(e.qtd)} prontas de ${e.passo.operacao.nome} · faltam ${i.passos.slice(e.k + 1).map((p) => p.operacao.nome).join(", ")}`)
-      : [i.passos.length ? `Processo: ${i.passos.map((p) => p.operacao.nome).join(" → ")}` : "sem processo cadastrado"],
+  const partesLinhas: LinhaParte[] = linhas.filter((l) => l.i.tipo === "peca").map(({ i, total, andamento, etapas, processo }) => ({
+    id: i.id, codigo: i.codigo, nome: i.nome, foto: i.foto, estoque: i.estoque, emProcesso: total, andamento, etapas, processo,
   }));
   const qs = (v: string, prod = produtoId) => `/estoque-parcial?ver=${v}${prod ? `&produto=${prod}` : ""}`;
   const Tabela = ({ titulo, ls }: { titulo: string; ls: typeof linhas }) => (
@@ -116,19 +121,13 @@ export default async function EstoqueParcial({ searchParams }: { searchParams: P
       <div className="card tabela">
         {ls.length === 0 ? <p className="suave">Nada aqui.</p> : (
           <table>
-            <thead><tr><th>{titulo === "Conjuntos" ? "Conjunto" : "Parte"}</th><th className="n">Pronta(s)</th><th className="n">Em processo</th><th className="so-pc">Onde estão e o que falta</th>{monta && <th></th>}</tr></thead>
-            <tbody>{ls.map(({ i, espera, total, andamento }) => (
+            <thead><tr><th>{titulo === "Conjuntos" ? "Conjunto" : "Parte"}</th><th className="n">Pronta(s)</th><th className="n">Em processo</th><th className="so-pc">Em qual processo está</th>{monta && <th></th>}</tr></thead>
+            <tbody>{ls.map(({ i, total, andamento, etapas, processo }) => (
               <tr key={i.id}>
                 <td><Link href={`/produtos/${i.id}`} className="com-foto" style={{ color: "inherit", textDecoration: "none" }}><span className="mini">{i.foto ? <img src={i.foto} alt="" /> : "sem foto"}</span><span className="t"><b>{i.nome}</b><small>{i.codigo}</small></span></Link></td>
                 <td className="n"><b style={{ color: i.estoque < 0 ? "var(--erro)" : undefined }}>{num(i.estoque)}</b></td>
-                <td className="n"><b style={{ color: total ? "var(--alerta)" : undefined }}>{total ? num(total) : "—"}</b>{andamento > 0 && <div className="suave">⏱ {andamento} rodando</div>}</td>
-                <td className="so-pc">
-                  {espera.slice(0, -1).filter((e) => e.qtd > 0).map((e) => (
-                    <div key={e.passo.id} style={{ marginBottom: 4 }}>
-                      <b>{num(e.qtd)}</b> prontas de <b>{e.passo.operacao.nome}</b> · <span className="suave">faltam {i.passos.slice(e.k + 1).map((p) => p.operacao.nome).join(", ")}</span>
-                    </div>
-                  ))}
-                  {total === 0 && <span className="suave">{i.passos.length ? `Processo: ${i.passos.map((p) => p.operacao.nome).join(" → ")}` : "sem processo cadastrado"}</span>}
+                <td className="n"><b style={{ color: total ? "var(--alerta)" : undefined }}>{total ? num(total) : "—"}</b>{andamento > 0 && <div className="suave">⏱ {andamento} rodando</div>}<SelosEtapa etapas={etapas} /></td>
+                <td className="so-pc"><DetalheEtapas etapas={etapas} processo={processo} />
                 </td>
                 {monta && (
                   <td>
@@ -164,7 +163,7 @@ export default async function EstoqueParcial({ searchParams }: { searchParams: P
       {ver !== "conjuntos" && (
         <>
           <h2>Partes ({partesLinhas.length})</h2>
-          {monta && <p className="suave" style={{ marginTop: -4 }}>Para formar um conjunto, marque as partes e clique em <b>Criar conjunto</b>.</p>}
+          {monta && <p className="suave" style={{ marginTop: -4 }}>Para formar um conjunto, marque as partes e clique em <b>Montar conjunto</b> no fim da lista.</p>}
           <PartesConjunto linhas={partesLinhas} conjuntos={conjMontar} acao={criarConjunto} podeMontar={monta} />
         </>
       )}

@@ -49,11 +49,6 @@ export default function FormFuncionario({
         </>
       )}
 
-      <h2 className="inteiro" style={{ margin: "8px 0 0" }}>Apontamento de produção</h2>
-      <label>
-        PIN para o celular (4 a 6 números)
-        <input name="pin" inputMode="numeric" pattern="\d{4,6}" placeholder={f?.pinHash ? "PIN já definido — digite para trocar" : "Defina um PIN"} />
-      </label>
       <label style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <input type="checkbox" name="ativo" defaultChecked={f?.ativo ?? true} /> Funcionário ativo
       </label>

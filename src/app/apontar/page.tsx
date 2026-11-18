@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import bcrypt from "bcryptjs";
 import { db, comoOperador } from "@/lib/db";
 import { registrarApontamento } from "@/lib/producao";
 import { Erro, dadosNovoProcesso, finalizarCronometro, iniciarCronometro, lancarProducao, pausarCronometro } from "@/lib/fluxo";
@@ -8,22 +7,12 @@ import NovoProcesso from "@/components/NovoProcesso";
 import Cronometro from "@/components/Cronometro";
 import MarcaCentro from "@/components/MarcaCentro";
 
-// Tentativas de PIN erradas por funcionário (em memória; zera ao reiniciar o servidor)
-const falhas = new Map<number, { n: number; ate: number }>();
 const nn = (v: FormDataEntryValue | null) => { const x = Number(String(v ?? "").replace(",", ".")); return Number.isFinite(x) ? x : 0; };
 
-/** Confere o PIN do colaborador; volta com erro se estiver errado. */
-async function conferirPin(funcionarioId: number, pin: string, volta: string) {
-  const erro = (m: string) => redirect(`${volta}${volta.includes("?") ? "&" : "?"}erro=` + encodeURIComponent(m));
-  const bloqueio = falhas.get(funcionarioId);
-  if (bloqueio && bloqueio.ate > Date.now()) erro("PIN bloqueado por 10 minutos após várias tentativas. Fale com o gestor.");
+/** Confere se o colaborador escolhido existe e está ativo (basta o nome, sem PIN). */
+async function conferirColaborador(funcionarioId: number, volta: string) {
   const f = await db.funcionario.findUnique({ where: { id: funcionarioId } });
-  if (!f || !f.ativo || !f.pinHash || !(await bcrypt.compare(pin, f.pinHash))) {
-    const n = (bloqueio?.n ?? 0) + 1;
-    falhas.set(funcionarioId, { n: n >= 5 ? 0 : n, ate: n >= 5 ? Date.now() + 10 * 60_000 : 0 });
-    erro("PIN incorreto.");
-  }
-  falhas.delete(funcionarioId);
+  if (!f || !f.ativo) redirect(`${volta}${volta.includes("?") ? "&" : "?"}erro=` + encodeURIComponent("Escolha seu nome na lista."));
   return f!;
 }
 
@@ -33,7 +22,7 @@ async function iniciar(form: FormData) {
   const p = { itemId: nn(form.get("itemId")), passoId: nn(form.get("passoId")), loteId: nn(form.get("loteId")) || null, planejado: nn(form.get("planejado")) || null, funcionarioId };
   const volta = `/apontar?f=${funcionarioId}&item=${p.itemId}&passo=${p.passoId}`;
   if (!p.itemId || !p.passoId || !funcionarioId) redirect("/apontar?erro=" + encodeURIComponent("Escolha o produto, a parte, o processo e seu nome."));
-  const f = await conferirPin(funcionarioId, String(form.get("pin") || ""), volta);
+  const f = await conferirColaborador(funcionarioId, volta);
   let msg = "";
   try {
     msg = await comoOperador(`${f.nome} (celular)`, async () => {
@@ -55,7 +44,7 @@ async function finalizar(form: FormData) {
   "use server";
   const id = nn(form.get("id"));
   const pr = await db.processoProducao.findUniqueOrThrow({ where: { id } });
-  const f = await conferirPin(pr.funcionarioId, String(form.get("pin") || ""), `/apontar?f=${pr.funcionarioId}`);
+  const f = await conferirColaborador(pr.funcionarioId, `/apontar?f=${pr.funcionarioId}`);
   let msg = "";
   try {
     msg = await comoOperador(`${f.nome} (celular)`, async () => {
@@ -77,24 +66,15 @@ async function apontar(form: FormData) {
   const quantidade = Math.round(Number(form.get("quantidade")));
   const refugo = Math.max(0, Math.round(Number(form.get("refugo") || 0)));
   const minutos = Number(String(form.get("minutos") || "").replace(",", "."));
-  const pin = String(form.get("pin") || "");
   const erro = (m: string) => redirect(`/apontar?f=${funcionarioId || ""}&erro=` + encodeURIComponent(m));
 
   if (!funcionarioId || !operacaoId) erro("Escolha seu nome e a operação.");
   if (!(quantidade > 0)) erro("Informe quantas peças boas você fez.");
   if (!(minutos > 0) || minutos > 16 * 60) erro("Informe o tempo trabalhado em minutos.");
 
-  const bloqueio = falhas.get(funcionarioId);
-  if (bloqueio && bloqueio.ate > Date.now()) erro("PIN bloqueado por 10 minutos após várias tentativas. Fale com o gestor.");
-  const f = await db.funcionario.findUnique({ where: { id: funcionarioId } });
-  if (!f || !f.ativo || !f.pinHash || !(await bcrypt.compare(pin, f.pinHash))) {
-    const n = (bloqueio?.n ?? 0) + 1;
-    falhas.set(funcionarioId, { n: n >= 5 ? 0 : n, ate: n >= 5 ? Date.now() + 10 * 60_000 : 0 });
-    erro("PIN incorreto.");
-  }
-  falhas.delete(funcionarioId);
+  const f = await conferirColaborador(funcionarioId, `/apontar?f=${funcionarioId}`);
 
-  const r = await comoOperador(`${f!.nome} (celular)`, () => registrarApontamento({ funcionarioId, operacaoId, quantidade, refugo, minutos }));
+  const r = await comoOperador(`${f.nome} (celular)`, () => registrarApontamento({ funcionarioId, operacaoId, quantidade, refugo, minutos }));
   const q = new URLSearchParams({
     f: String(funcionarioId),
     ok: "1",
@@ -111,7 +91,7 @@ export default async function Apontar({
 }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const [funcs, etapas, dados, andamento] = await Promise.all([
-    db.funcionario.findMany({ where: { ativo: true, pinHash: { not: null } }, orderBy: { nome: "asc" } }),
+    db.funcionario.findMany({ where: { ativo: true }, orderBy: { nome: "asc" } }),
     db.etapa.findMany({ orderBy: { ordem: "asc" }, include: { operacoes: { where: { ativo: true }, orderBy: { nome: "asc" } } } }),
     dadosNovoProcesso(),
     db.processoProducao.findMany({ where: { status: "andamento" }, include: { item: true, passo: { include: { operacao: true } }, lote: true, funcionario: true }, orderBy: { inicio: "asc" } }),
@@ -140,7 +120,6 @@ export default async function Apontar({
                   <div className="apontar-campos tres" style={{ marginTop: 0 }}>
                     <label>Peças boas<input name="quantidade" type="number" inputMode="numeric" min={0} /></label>
                     <label>Refugo<input name="refugo" type="number" inputMode="numeric" min={0} defaultValue={0} /></label>
-                    <label>PIN de {pr.funcionario.nome.split(" ")[0]}<input name="pin" type="password" inputMode="numeric" pattern="\d{4,6}" required autoComplete="off" /></label>
                   </div>
                   <div className="acoes">
                     <button className="btn" name="acao" value="finalizar">■ Finalizar</button>
@@ -152,7 +131,7 @@ export default async function Apontar({
           </>
         )}
         <h2>Iniciar novo processo</h2>
-        <NovoProcesso dados={dados} acao={iniciar} comPin inicial={{ itemId: Number(sp.item) || undefined, passoId: Number(sp.passo) || undefined, funcionarioId: Number(sp.f) || undefined }} />
+        <NovoProcesso dados={dados} acao={iniciar} inicial={{ itemId: Number(sp.item) || undefined, passoId: Number(sp.passo) || undefined, funcionarioId: Number(sp.f) || undefined }} />
         <details className="editar" style={{ marginTop: 24 }}>
           <summary>Lançamento avulso (operação sem peça cadastrada)</summary>
         {sp.ok && (
@@ -166,7 +145,7 @@ export default async function Apontar({
           </div>
         )}
         {funcs.length === 0 ? (
-          <p className="suave">Nenhum funcionário com PIN cadastrado. Peça ao gestor para cadastrar seu PIN.</p>
+          <p className="suave">Nenhum colaborador cadastrado. Peça ao gestor para cadastrar.</p>
         ) : (
           <form action={apontar}>
             <label>Seu nome
@@ -188,7 +167,6 @@ export default async function Apontar({
             <label>Peças boas<input name="quantidade" type="number" inputMode="numeric" min={1} required /></label>
             <label>Refugo (peças perdidas)<input name="refugo" type="number" inputMode="numeric" min={0} defaultValue={0} /></label>
             <label>Tempo trabalhado (minutos)<input name="minutos" type="number" inputMode="decimal" min={1} step="any" required /></label>
-            <label>PIN<input name="pin" type="password" inputMode="numeric" pattern="\d{4,6}" required autoComplete="off" /></label>
             <button className="btn">Registrar</button>
           </form>
         )}

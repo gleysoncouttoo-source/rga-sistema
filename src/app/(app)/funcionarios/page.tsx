@@ -68,7 +68,7 @@ export default async function Funcionarios({ searchParams }: { searchParams: Pro
       <div className="card tabela">
         {lista.length === 0 ? <p className="suave">Nenhum colaborador cadastrado ainda.</p> : (
           <table>
-            <thead><tr><th>Nome</th><th>Cargo</th><th>Setor</th><th>Admissão</th>{verSal && <th className="n">Salário</th>}<th className="n">Peças no mês</th><th className="n">Horas no mês</th><th className="n">Recordes</th><th>PIN</th>{exclui && <th></th>}</tr></thead>
+            <thead><tr><th>Nome</th><th>Cargo</th><th>Setor</th><th>Admissão</th>{verSal && <th className="n">Salário</th>}<th className="n">Peças no mês</th><th className="n">Horas no mês</th><th className="n">Recordes</th>{exclui && <th></th>}</tr></thead>
             <tbody>{lista.map((f) => {
               const p = prod.get(f.id);
               return (
@@ -79,7 +79,6 @@ export default async function Funcionarios({ searchParams }: { searchParams: Pro
                   <td className="n">{num(p?._sum.quantidade ?? 0)}</td>
                   <td className="n">{num((p?._sum.minutos ?? 0) / 60, 1)}</td>
                   <td className="n">{contaRec.get(f.id) ? <b>🏆 {contaRec.get(f.id)}</b> : "—"}</td>
-                  <td>{f.pinHash ? <span className="selo ok">definido</span> : <span className="selo alerta">sem PIN</span>}</td>
                   {exclui && <td>{f.ativo && <Excluir acao={excluirFuncionario} campos={{ id: f.id }} pergunta={`Excluir ${f.nome}? Se já tiver produção ou contas, fica como desligado.`} />}</td>}
                 </tr>
               );
