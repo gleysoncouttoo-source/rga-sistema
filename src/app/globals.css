@@ -253,3 +253,27 @@ details.editar[open] > summary { margin-bottom: 10px; }
 .lista-cel .cel-item:first-child { border-top: 0; }
 .cel-dados { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: .9rem; font-weight: 600; }
 .cel-dados small { display: block; color: var(--suave); font-weight: 400; font-size: .75rem; }
+/* Cadastro de fornecedor em seções */
+.form-forn fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.form-forn section { padding: 16px 0; border-top: 1px solid var(--linha); }
+.form-forn section:first-child { border-top: 0; padding-top: 4px; }
+.form-forn h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: .95rem; }
+.form-forn h3 span { width: 22px; height: 22px; border-radius: 999px; background: var(--grafite); color: var(--acento); display: inline-flex; align-items: center; justify-content: center; font-size: .75rem; }
+.form-forn .largo { grid-column: span 2; }
+.form-forn small { color: var(--suave); font-weight: 400; font-size: .75rem; }
+.form-forn textarea { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--borda); border-radius: 8px; background: var(--card); resize: vertical; }
+.linhas-mp { display: flex; flex-direction: column; gap: 10px; }
+.linha-mp { position: relative; display: grid; grid-template-columns: minmax(240px, 2.2fr) repeat(5, minmax(100px, 1fr)); gap: 10px; align-items: end; padding: 12px 36px 12px 12px; background: var(--bg); border: 1px solid var(--borda); border-radius: 10px; }
+.linha-mp label { gap: 4px; font-size: .82rem; }
+.linha-mp input { width: 100%; min-width: 0; }
+.mp-item { display: flex; flex-direction: column; gap: 4px; }
+.mp-item small { font-weight: 600; color: var(--texto); font-size: .82rem; }
+.mp-tirar { position: absolute; top: 50%; transform: translateY(-50%); right: 8px; border: 0; background: none; font-size: 1.2rem; line-height: 1; color: var(--suave); cursor: pointer; }
+.mp-tirar:hover { color: var(--erro); }
+.link-mais { margin-top: 10px; border: 0; background: none; padding: 4px 0; font: inherit; font-weight: 600; color: var(--texto); cursor: pointer; text-decoration: underline; text-decoration-color: var(--acento); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+@media (max-width: 1100px) { .linha-mp { grid-template-columns: 1fr 1fr 1fr; } .mp-item { grid-column: 1 / -1; padding-right: 24px; } }
+@media (max-width: 760px) { .form-forn .largo { grid-column: auto; } .linha-mp { grid-template-columns: 1fr 1fr; } }
+.ficha { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 20px; }
+.ficha div small { display: block; color: var(--suave); font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+.ficha div { font-size: .92rem; }
+.form-forn .campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
