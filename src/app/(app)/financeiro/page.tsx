@@ -142,6 +142,7 @@ export default async function Financeiro({ searchParams }: { searchParams: Promi
       <div className="topo">
         <h1 style={{ margin: 0 }}>Financeiro</h1>
         <div className="acoes">
+          {edita && <a className="btn sec" href="/financeiro/extrato">Subir extrato do banco</a>}
           <a className="btn sec" href={`/financeiro/exportar${qs({})}`}>Baixar planilha</a>
           {pode(u.permissoes, "financeiro", "criar") && <a className="btn" href={`/financeiro${qs({ novo: "1" })}#nova`}>+ Adicionar conta</a>}
         </div>

@@ -427,6 +427,42 @@ model ContaBancaria {
   atualizadoPor String?
 }
 
+// Extrato do banco enviado (OFX/CSV). Fica "lida" até a conferência ser confirmada.
+model ImportacaoExtrato {
+  id          Int       @id @default(autoincrement())
+  banco       String
+  arquivo     String
+  de          DateTime?
+  ate         DateTime?
+  saldo       Float? // saldo final informado no arquivo
+  saldoEm     DateTime?
+  dados       Json // lançamentos lidos
+  resumo      String?
+  status      String    @default("lida") // lida, parcial, conferida
+  usuario     String?
+  criadoEm    DateTime  @default(now())
+  conferidoEm DateTime?
+}
+
+// Cada lançamento do extrato já conferido, para não dar baixa duas vezes quando os períodos se repetem.
+model MovimentoBanco {
+  id             Int      @id @default(autoincrement())
+  banco          String
+  chave          String // data|valor|descrição|ordem
+  data           DateTime
+  valor          Float // negativo = saída
+  descricao      String
+  acao           String // baixa, nova, ignorado
+  contaPagarId   Int?
+  contaReceberId Int?
+  importacaoId   Int?
+  usuario        String?
+  criadoEm       DateTime @default(now())
+
+  @@unique([banco, chave])
+  @@index([data])
+}
+
 // Dinheiro a receber: clientes, vendas no site (Shopee etc.), serviços
 model ContaReceber {
   id            Int          @id @default(autoincrement())
