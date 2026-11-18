@@ -361,6 +361,10 @@ model ContaPagar {
   formaPagamento String? // boleto, pix, transferência, dinheiro, débito
   codigoBarras   String? // linha digitável do boleto
   chavePix       String?
+  bancoRecebedor String? // dados bancários de quem recebe (transferência/TED)
+  agencia        String?
+  contaRecebedor String?
+  documento      String? // CPF ou CNPJ de quem recebe
   descricao      String
   categoria      String           @default("Fornecedor") // Fornecedor, Colaboradores, Condomínio, Energia, Impostos, Outras
   observacao     String?

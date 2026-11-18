@@ -1,5 +1,5 @@
 const ABAS: [string, string, string][] = [
-  ["pagamentos", "Pagamentos do dia", "/financeiro"],
+  ["pagamentos", "Contas a pagar", "/financeiro"],
   ["fluxo", "Fluxo de caixa", "/financeiro/fluxo"],
   ["receber", "Recebimentos", "/financeiro/receber"],
   ["extrato", "Extrato do banco", "/financeiro/extrato"],
