@@ -3,24 +3,33 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { auditar, exigir } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
-import MontarConjunto from "@/components/MontarConjunto";
+import PartesConjunto, { type LinhaParte } from "@/components/PartesConjunto";
 import IrPara from "@/components/IrPara";
 import { saldosLotes } from "@/lib/fluxo";
 import { num } from "@/lib/formato";
 
-/** Montar conjunto: as partes escolhidas saem do estoque e o conjunto entra. */
-async function montar(form: FormData) {
+const volta = (k: "ok" | "erro", m: string) => redirect(`/estoque-parcial?${k}=${encodeURIComponent(m)}`);
+
+/** Criar conjunto: as partes marcadas saem do estoque e o conjunto entra (cadastrado ou novo). */
+async function criarConjunto(form: FormData) {
   "use server";
   const u = await exigir("producao", "criar");
-  const conjuntoId = Number(form.get("conjuntoId")), qtd = Number(form.get("quantidade"));
-  let partes: { id: number; q: number }[] = [];
-  try { partes = JSON.parse(String(form.get("partes") || "[]")); } catch { /* vazio */ }
-  partes = partes.filter((x) => Number.isFinite(x.id) && x.q > 0);
-  if (!conjuntoId || !(qtd > 0)) redirect("/estoque-parcial?erro=" + encodeURIComponent("Escolha o conjunto e a quantidade."));
-  if (!partes.length) redirect("/estoque-parcial?erro=" + encodeURIComponent("Marque pelo menos uma parte."));
+  const qtd = Math.round(Number(form.get("quantidade")));
+  const ler = (k: string) => { try { return (JSON.parse(String(form.get(k) || "[]")) as { id: number; q: number }[]).filter((x) => Number.isFinite(x.id) && x.q > 0); } catch { return []; } };
+  const partes = ler("partes"), porConj = ler("porConjunto");
+  if (!partes.length) volta("erro", "Marque pelo menos uma parte.");
+  if (!(qtd > 0)) volta("erro", "Informe quantos conjuntos.");
+  let conjuntoId = Number(form.get("conjuntoId")) || 0;
+  if (!conjuntoId) {
+    const nome = String(form.get("novoNome") || "").trim();
+    if (!nome) volta("erro", "Dê um nome ao conjunto novo.");
+    const novo = await db.item.create({ data: { nome, tipo: "conjunto", origem: "fabricado", setor: "Montagem", componentes: { create: porConj.map((x) => ({ filhoId: x.id, quantidade: x.q })) } } });
+    conjuntoId = novo.id;
+    await auditar(u.nome, "criou conjunto", nome);
+  }
   const conj = await db.item.findUnique({ where: { id: conjuntoId } });
-  if (!conj) redirect("/estoque-parcial?erro=" + encodeURIComponent("Conjunto não encontrado."));
-  const motivo = `Montagem de ${qtd} ${conj!.nome}`;
+  if (!conj) return volta("erro", "Conjunto não encontrado.");
+  const motivo = `Montagem de ${qtd} ${conj.nome}`;
   await db.$transaction([
     ...partes.flatMap((x) => [
       db.item.update({ where: { id: x.id }, data: { estoque: { increment: -x.q } } }),
@@ -29,8 +38,29 @@ async function montar(form: FormData) {
     db.item.update({ where: { id: conjuntoId }, data: { estoque: { increment: qtd } } }),
     db.movimentoEstoque.create({ data: { itemId: conjuntoId, quantidade: qtd, motivo, usuario: u.nome } }),
   ]);
-  await auditar(u.nome, "montou conjunto", `${qtd} × ${conj!.nome} (${partes.length} parte(s))`);
-  redirect("/estoque-parcial?ok=" + encodeURIComponent(`${qtd} ${conj!.nome} montado(s). As partes saíram do estoque.`));
+  await auditar(u.nome, "montou conjunto", `${qtd} × ${conj.nome} (${partes.length} parte(s))`);
+  volta("ok", `${qtd} ${conj.nome} criado(s). As partes saíram do estoque.`);
+}
+
+/** Desfazer conjunto: o conjunto sai do estoque e as partes da estrutura voltam. */
+async function desfazerConjunto(form: FormData) {
+  "use server";
+  const u = await exigir("producao", "criar");
+  const id = Number(form.get("id")), qtd = Math.round(Number(form.get("quantidade")));
+  const conj = await db.item.findUnique({ where: { id }, include: { componentes: true } });
+  if (!conj || !(qtd > 0)) return volta("erro", "Informe quantos desfazer.");
+  if (qtd > conj.estoque) return volta("erro", `Só tem ${conj.estoque} ${conj.nome} pronto(s).`);
+  const motivo = `Desfeito ${qtd} ${conj.nome}`;
+  await db.$transaction([
+    db.item.update({ where: { id }, data: { estoque: { increment: -qtd } } }),
+    db.movimentoEstoque.create({ data: { itemId: id, quantidade: -qtd, motivo, usuario: u.nome } }),
+    ...conj.componentes.flatMap((c) => [
+      db.item.update({ where: { id: c.filhoId }, data: { estoque: { increment: c.quantidade * qtd } } }),
+      db.movimentoEstoque.create({ data: { itemId: c.filhoId, quantidade: c.quantidade * qtd, motivo, usuario: u.nome } }),
+    ]),
+  ]);
+  await auditar(u.nome, "desfez conjunto", `${qtd} × ${conj.nome}`);
+  volta("ok", `${qtd} ${conj.nome} desfeito(s). As partes voltaram para o estoque.`);
 }
 
 /** Estoque parcial: peças que já passaram por parte do processo e o que ainda falta para ficarem prontas. */
@@ -71,8 +101,14 @@ export default async function EstoqueParcial({ searchParams }: { searchParams: P
   });
   const ver = sp.ver === "partes" || sp.ver === "conjuntos" ? sp.ver : "tudo";
   const totalPecas = linhas.reduce((s, l) => s + l.total, 0);
-  const pecasMontar = itens.filter((i) => i.tipo === "peca").map((i) => ({ id: i.id, codigo: i.codigo, nome: i.nome, foto: i.foto, estoque: i.estoque }));
-  const conjMontar = itens.filter((i) => i.tipo === "conjunto").map((i) => ({ id: i.id, codigo: i.codigo, nome: i.nome, foto: i.foto, estoque: i.estoque, estrutura: i.componentes.map((c) => ({ filhoId: c.filhoId, quantidade: c.quantidade })) }));
+  const monta = pode(u.permissoes, "producao", "criar");
+  const conjMontar = itens.filter((i) => i.tipo === "conjunto").map((i) => ({ id: i.id, nome: i.nome, estrutura: i.componentes.map((c) => ({ filhoId: c.filhoId, quantidade: c.quantidade })) }));
+  const partesLinhas: LinhaParte[] = linhas.filter((l) => l.i.tipo === "peca").map(({ i, espera, total, andamento }) => ({
+    id: i.id, codigo: i.codigo, nome: i.nome, foto: i.foto, estoque: i.estoque, emProcesso: total, andamento,
+    onde: total > 0
+      ? espera.slice(0, -1).filter((e) => e.qtd > 0).map((e) => `${num(e.qtd)} prontas de ${e.passo.operacao.nome} · faltam ${i.passos.slice(e.k + 1).map((p) => p.operacao.nome).join(", ")}`)
+      : [i.passos.length ? `Processo: ${i.passos.map((p) => p.operacao.nome).join(" → ")}` : "sem processo cadastrado"],
+  }));
   const qs = (v: string, prod = produtoId) => `/estoque-parcial?ver=${v}${prod ? `&produto=${prod}` : ""}`;
   const Tabela = ({ titulo, ls }: { titulo: string; ls: typeof linhas }) => (
     <>
@@ -80,7 +116,7 @@ export default async function EstoqueParcial({ searchParams }: { searchParams: P
       <div className="card tabela">
         {ls.length === 0 ? <p className="suave">Nada aqui.</p> : (
           <table>
-            <thead><tr><th>{titulo === "Conjuntos" ? "Conjunto" : "Parte"}</th><th className="n">Pronta(s)</th><th className="n">Em processo</th><th className="so-pc">Onde estão e o que falta</th></tr></thead>
+            <thead><tr><th>{titulo === "Conjuntos" ? "Conjunto" : "Parte"}</th><th className="n">Pronta(s)</th><th className="n">Em processo</th><th className="so-pc">Onde estão e o que falta</th>{monta && <th></th>}</tr></thead>
             <tbody>{ls.map(({ i, espera, total, andamento }) => (
               <tr key={i.id}>
                 <td><Link href={`/produtos/${i.id}`} className="com-foto" style={{ color: "inherit", textDecoration: "none" }}><span className="mini">{i.foto ? <img src={i.foto} alt="" /> : "sem foto"}</span><span className="t"><b>{i.nome}</b><small>{i.codigo}</small></span></Link></td>
@@ -94,6 +130,17 @@ export default async function EstoqueParcial({ searchParams }: { searchParams: P
                   ))}
                   {total === 0 && <span className="suave">{i.passos.length ? `Processo: ${i.passos.map((p) => p.operacao.nome).join(" → ")}` : "sem processo cadastrado"}</span>}
                 </td>
+                {monta && (
+                  <td>
+                    {i.estoque > 0 && i.componentes.length > 0 && (
+                      <form action={desfazerConjunto} className="linha-form" style={{ flexWrap: "nowrap", gap: 6 }}>
+                        <input type="hidden" name="id" value={i.id} />
+                        <input name="quantidade" type="number" min={1} max={i.estoque} defaultValue={1} aria-label="Quantos desfazer" style={{ width: 64, minHeight: 34 }} />
+                        <button className="btn sec peq">Desfazer</button>
+                      </form>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}</tbody>
           </table>
@@ -107,21 +154,20 @@ export default async function EstoqueParcial({ searchParams }: { searchParams: P
       {sp.erro && <div className="aviso erro">{sp.erro}</div>}
       {sp.ok && <div className="aviso ok">{sp.ok}</div>}
       <div className="topo" style={{ alignItems: "flex-end" }}>
-        <p className="suave" style={{ margin: 0, maxWidth: 620 }}>Conjuntos e partes prontos e o que ainda está no meio do processo. <b>{num(totalPecas)}</b> peça(s) em processo no total.</p>
+        <p className="suave" style={{ margin: 0, maxWidth: 620 }}>Conjuntos e partes prontos e o que ainda está no meio do processo. <b>Desfazer</b> um conjunto devolve as partes ao estoque. <b>{num(totalPecas)}</b> peça(s) em processo no total.</p>
         <div className="acoes">
           <IrPara rotulo="Mostrar" valor={qs(ver)} opcoes={[{ href: qs("tudo"), nome: "Conjuntos e partes" }, { href: qs("conjuntos"), nome: "Só conjuntos" }, { href: qs("partes"), nome: "Só partes" }]} />
           <IrPara rotulo="Produto" valor={qs(ver)} opcoes={[{ href: qs(ver, null), nome: "Todos os produtos" }, ...produtos.map((p) => ({ href: qs(ver, p.id), nome: `${p.codigo ?? ""} — ${p.nome}` }))]} />
         </div>
       </div>
-      {pode(u.permissoes, "producao", "criar") && conjMontar.length > 0 && (
-        <div className="card">
-          <b>Montar conjunto</b>
-          <p className="suave" style={{ margin: "4px 0 0" }}>Escolha o conjunto e confira as partes. As partes marcadas saem do estoque e o conjunto entra pronto.</p>
-          <MontarConjunto conjuntos={conjMontar} pecas={pecasMontar} acao={montar} />
-        </div>
-      )}
       {ver !== "partes" && <Tabela titulo="Conjuntos" ls={linhas.filter((l) => l.i.tipo === "conjunto")} />}
-      {ver !== "conjuntos" && <Tabela titulo="Partes" ls={linhas.filter((l) => l.i.tipo === "peca")} />}
+      {ver !== "conjuntos" && (
+        <>
+          <h2>Partes ({partesLinhas.length})</h2>
+          {monta && <p className="suave" style={{ marginTop: -4 }}>Para formar um conjunto, marque as partes e clique em <b>Criar conjunto</b>.</p>}
+          <PartesConjunto linhas={partesLinhas} conjuntos={conjMontar} acao={criarConjunto} podeMontar={monta} />
+        </>
+      )}
       <p className="suave">Detalhes de cada lote (quem fez cada processo e o tempo) em <Link href="/producao">Produção</Link>.</p>
     </>
   );

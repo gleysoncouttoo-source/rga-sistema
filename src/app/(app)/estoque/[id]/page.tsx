@@ -6,6 +6,7 @@ import { auditar, exigir } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { custoMaterial, saldos } from "@/lib/planejamento";
 import { registrarPreco } from "@/lib/precos";
+import { fornecedorPorNome } from "@/lib/fornecedores";
 import { dia } from "@/lib/datas";
 import { brl, dataDia, dataHora, qtd } from "@/lib/formato";
 import { TIPOS } from "@/lib/rotulos";
@@ -16,16 +17,19 @@ async function salvar(form: FormData) {
   "use server";
   const u = await exigir("estoque", "editar");
   const id = Number(form.get("id"));
-  const fornecedorId = Number(form.get("fornecedorId")) || null;
+  const origem = String(form.get("origem"));
+  // fornecedor é digitado: acha pelo nome ou cria; o tempo de entrega médio fica no fornecedor (é o que as compras usam)
+  const prazo = origem === "comprado" && String(form.get("prazoEntrega") ?? "") !== "" ? n(form.get("prazoEntrega")) : null;
+  const fornecedorId = await fornecedorPorNome(form.get("fornecedor"), prazo);
   const antes = await db.item.findUniqueOrThrow({ where: { id } });
   const novoPreco = form.get("precoCompra") ? n(form.get("precoCompra")) : null;
   await db.item.update({
     where: { id },
     data: {
-      nome: String(form.get("nome")).trim(), unidade: String(form.get("unidade")), origem: String(form.get("origem")),
-      estoqueMinimo: n(form.get("estoqueMinimo")), diasFabricacao: Math.max(0, Math.round(n(form.get("diasFabricacao")))),
+      nome: String(form.get("nome")).trim(), unidade: String(form.get("unidade")), origem,
+      estoqueMinimo: n(form.get("estoqueMinimo")), ...(form.has("diasFabricacao") ? { diasFabricacao: Math.max(0, Math.round(n(form.get("diasFabricacao")))) } : {}),
       precoCompra: form.get("precoCompra") ? n(form.get("precoCompra")) : null, precoVenda: form.get("precoVenda") ? n(form.get("precoVenda")) : null,
-      loteMinimo: form.get("loteMinimo") ? n(form.get("loteMinimo")) : null, fornecedorId, setor: String(form.get("setor") || "") || null, observacao: String(form.get("obs") || "") || null,
+      loteMinimo: form.get("loteMinimo") ? n(form.get("loteMinimo")) : null, fornecedorId, setor: origem === "comprado" ? null : String(form.get("setor") || "") || antes.setor, observacao: String(form.get("obs") || "") || null,
     },
   });
   // preço de compra alterado à mão entra no histórico de preços
@@ -72,6 +76,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
         movimentos: { orderBy: { criadoEm: "desc" }, take: 15 },
         precos: { include: { fornecedor: true }, orderBy: { data: "desc" }, take: 20 },
         reservas: { include: { pedidoVenda: true } },
+        fornecedor: true,
       },
     }),
     db.item.findMany({ where: { ativo: true }, include: { componentes: true }, orderBy: [{ tipo: "asc" }, { nome: "asc" }] }),
@@ -155,11 +160,21 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
               <label>Origem<select name="origem" defaultValue={it.origem}><option value="comprado">Comprado</option><option value="fabricado">Fabricado aqui</option></select></label>
               <label>Unidade<select name="unidade" defaultValue={it.unidade}><option>un</option><option>kg</option><option>m</option><option>L</option></select></label>
               <label>Estoque mínimo<input name="estoqueMinimo" inputMode="decimal" defaultValue={it.estoqueMinimo || ""} /></label>
-              <label>Setor que produz<select name="setor" defaultValue={it.setor ?? ""}><option value="">—</option>{["Estamparia", "Solda", "Injeção", "Usinagem", "Polimento", "Banho de zinco", "Montagem"].map((x) => <option key={x}>{x}</option>)}</select></label>
-              <label>Dias para fabricar/montar<input name="diasFabricacao" type="number" min={0} defaultValue={it.diasFabricacao} /></label>
+              {it.origem === "comprado" ? (
+                <>
+                  <label>Fornecedor<input name="fornecedor" list="lista-fornecedores" defaultValue={it.fornecedor?.nome ?? ""} placeholder="Digite o nome" autoComplete="off" /></label>
+                  <label>Tempo de entrega médio (dias)<input name="prazoEntrega" type="number" min={0} defaultValue={it.fornecedor?.prazoEntregaDias ?? ""} placeholder="ex.: 7" /></label>
+                </>
+              ) : (
+                <>
+                  <label>Setor que produz<select name="setor" defaultValue={it.setor ?? ""}><option value="">—</option>{["Estamparia", "Solda", "Injeção", "Usinagem", "Polimento", "Banho de zinco", "Montagem"].map((x) => <option key={x}>{x}</option>)}</select></label>
+                  <label>Dias para fabricar/montar<input name="diasFabricacao" type="number" min={0} defaultValue={it.diasFabricacao} /></label>
+                </>
+              )}
               <label>{it.origem === "comprado" ? "Preço de compra atual (R$)" : "Custo informado (R$, se não tiver estrutura)"}<input name="precoCompra" inputMode="decimal" defaultValue={it.precoCompra ?? ""} /></label>
               {it.tipo === "produto" && <label>Valor de venda (R$)<input name="precoVenda" inputMode="decimal" defaultValue={it.precoVenda ?? ""} /></label>}
-              <label>Fornecedor<select name="fornecedorId" defaultValue={it.fornecedorId ?? ""}><option value="">—</option>{fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}</select></label>
+              {it.origem !== "comprado" && <input type="hidden" name="fornecedor" value={it.fornecedor?.nome ?? ""} />}
+              <datalist id="lista-fornecedores">{fornecedores.map((f) => <option key={f.id} value={f.nome} />)}</datalist>
               <label>Lote mínimo de compra<input name="loteMinimo" inputMode="decimal" defaultValue={it.loteMinimo ?? ""} /></label>
               <label className="inteiro">Observação<input name="obs" defaultValue={it.observacao ?? ""} /></label>
               <div className="inteiro"><button className="btn">Salvar</button></div>

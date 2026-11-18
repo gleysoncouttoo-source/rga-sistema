@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { auditar, exigir } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { registrarPreco } from "@/lib/precos";
+import { fornecedorPorNome } from "@/lib/fornecedores";
 import { dia } from "@/lib/datas";
 import { brl, num, qtd } from "@/lib/formato";
 import Excluir from "@/components/Excluir";
@@ -22,12 +23,13 @@ async function nova(form: FormData) {
   const nome = txt(form.get("nome"));
   if (!nome) volta("erro", "Informe o nome.");
   const estoque = nn(form.get("estoque")), preco = form.get("precoCompra") ? nn(form.get("precoCompra")) : null;
+  const fornecedorId = await fornecedorPorNome(form.get("fornecedor"), form.get("prazoEntrega") ? nn(form.get("prazoEntrega")) : null);
   try {
     const it = await db.item.create({
       data: {
         nome: nome!, codigo: txt(form.get("codigo")), tipo: "materia_prima", origem: "comprado", unidade: String(form.get("unidade") || "kg"),
         material: txt(form.get("material")), dimensoes: txt(form.get("dimensoes")), pesoUnitKg: form.get("pesoUnitKg") ? nn(form.get("pesoUnitKg")) : null,
-        precoCompra: preco, estoque, estoqueMinimo: nn(form.get("estoqueMinimo")), fornecedorId: nn(form.get("fornecedorId")) || null,
+        precoCompra: preco, estoque, estoqueMinimo: nn(form.get("estoqueMinimo")), fornecedorId,
       },
     });
     if (estoque) await db.movimentoEstoque.create({ data: { itemId: it.id, quantidade: estoque, motivo: "Estoque inicial", usuario: u.nome } });
@@ -172,7 +174,9 @@ export default async function MateriaPrima({ searchParams }: { searchParams: Pro
             <label>Preço (R$ por unidade de controle)<input name="precoCompra" inputMode="decimal" /></label>
             <label>Estoque inicial<input name="estoque" inputMode="decimal" /></label>
             <label>Estoque mínimo<input name="estoqueMinimo" inputMode="decimal" /></label>
-            <label>Fornecedor<select name="fornecedorId" defaultValue=""><option value="">—</option>{fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}</select></label>
+            <label>Fornecedor<input name="fornecedor" list="lista-fornecedores" placeholder="Digite o nome" autoComplete="off" /></label>
+            <label>Tempo de entrega médio (dias)<input name="prazoEntrega" type="number" min={0} placeholder="ex.: 7" /></label>
+            <datalist id="lista-fornecedores">{fornecedores.map((f) => <option key={f.id} value={f.nome} />)}</datalist>
             <div className="inteiro"><button className="btn">Adicionar</button></div>
           </form>
         </div>
