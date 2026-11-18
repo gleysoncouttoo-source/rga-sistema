@@ -191,7 +191,7 @@ export default async function Apontar({
           </form>
         )}
         </details>
-        <p className="suave" style={{ marginTop: 18 }}><a href="/login">Entrar no sistema</a></p>
+        <p className="suave" style={{ marginTop: 18 }}><a href="/producao">← Voltar para o sistema</a></p>
       </div>
     </main>
   );

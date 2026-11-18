@@ -85,7 +85,7 @@ export default function NovoProcesso({ dados, acao, comPin = false, inicial }: {
               <button type="button" key={i.id} className={itemId === i.id ? "sel" : ""} disabled={!i.passos.length} style={!i.passos.length ? { opacity: 0.5 } : undefined} onClick={() => escolherItem(i)}>
                 <Mini foto={i.foto} />
                 <span><b>{i.id === produtoId ? "Montagem final" : i.nome}</b> <small>· {i.codigo}</small><br />
-                  <small>{i.passos.length ? i.passos.map((p) => `${p.nome} (${p.etapa})`).join(" → ") : "sem processo cadastrado (cadastre em Produtos)"}</small></span>
+                  <small>{i.passos.length ? i.passos.map((p) => `${p.nome} (${p.etapa})`).join(" → ") : "sem processo cadastrado (cadastre em Produção → Processos das peças)"}</small></span>
               </button>
             ))}
           </div>

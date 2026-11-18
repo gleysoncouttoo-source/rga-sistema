@@ -1,15 +1,16 @@
 import { acaoPasso } from "@/lib/acoesProdutos";
 
 type Op = { id: number; nome: string; etapa: string; etapaId: number };
-type P = { id: number; ordem: number; operacao: { nome: string; etapa: { nome: string } } };
+type P = { id: number; ordem: number; operacao: { nome: string; etapaId: number; etapa: { nome: string } } };
 
-/** Lista e edita o processo (passos) de uma peça: adicionar, tirar, mudar a ordem. */
-export default function EditorProcesso({ itemId, pagina, passos, ops, etapas, edita }: {
-  itemId: number; pagina: number; passos: P[]; ops: Op[]; etapas: { id: number; nome: string }[]; edita: boolean;
+/** Lista e edita o processo (passos) de uma peça: adicionar, editar, tirar, mudar a ordem. */
+export default function EditorProcesso({ itemId, pagina, passos, ops, etapas, edita, volta }: {
+  itemId: number; pagina: number; passos: P[]; ops: Op[]; etapas: { id: number; nome: string }[]; edita: boolean; volta?: string;
 }) {
   const h = (acao: string, passoId?: number) => (
     <>
       <input type="hidden" name="itemId" value={itemId} /><input type="hidden" name="pagina" value={pagina} />
+      {volta && <input type="hidden" name="volta" value={volta} />}
       <input type="hidden" name="acao" value={acao} />{passoId && <input type="hidden" name="passoId" value={passoId} />}
     </>
   );
@@ -20,7 +21,20 @@ export default function EditorProcesso({ itemId, pagina, passos, ops, etapas, ed
           <tbody>{passos.map((p, i) => (
             <tr key={p.id}>
               <td style={{ width: 34 }}><span className="passo-n">{i + 1}</span></td>
-              <td><b>{p.operacao.nome}</b> <span className="suave">· {p.operacao.etapa.nome}</span>{i === passos.length - 1 && <span className="suave"> · depois deste a peça fica pronta</span>}</td>
+              <td>
+                <b>{p.operacao.nome}</b> <span className="suave">· {p.operacao.etapa.nome}</span>{i === passos.length - 1 && <span className="suave"> · depois deste a peça fica pronta</span>}
+                {edita && (
+                  <details className="editar-passo">
+                    <summary>Editar</summary>
+                    <form action={acaoPasso} className="linha-form">
+                      {h("editar", p.id)}
+                      <label>Etapa<select name="etapaId" defaultValue={p.operacao.etapaId}>{etapas.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}</select></label>
+                      <label>Nome do processo<input name="nome" defaultValue={p.operacao.nome} required /></label>
+                      <button className="btn sec peq">Salvar</button>
+                    </form>
+                  </details>
+                )}
+              </td>
               {edita && (
                 <td className="n">
                   <div className="acoes" style={{ justifyContent: "flex-end" }}>

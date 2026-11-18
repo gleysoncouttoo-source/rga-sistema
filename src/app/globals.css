@@ -181,3 +181,10 @@ details.editar > summary { cursor: pointer; color: var(--texto); text-decoration
 details.editar[open] > summary { margin-bottom: 10px; }
 .chk { flex-direction: row; align-items: center; gap: 8px; color: var(--texto); font-weight: 500; }
 .chk-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+
+/* Editar um passo do processo */
+.editar-passo { display: inline-block; margin-left: 8px; }
+.editar-passo > summary { display: inline; cursor: pointer; font-size: .82rem; font-weight: 600; list-style: none; text-decoration: underline; text-decoration-color: var(--acento); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.editar-passo > summary::-webkit-details-marker { display: none; }
+.editar-passo[open] { display: block; margin: 8px 0 4px; }
+.editar-passo form { margin-top: 6px; }
