@@ -116,6 +116,14 @@ async function main() {
   await carregarFechaduras(prisma);
   await carregarRoteiros(prisma);
   await carregarFotos(prisma);
+  // aba Fornecedores: item que já tem fornecedor aparece na lista dele (só cria o que falta)
+  const ligados = await prisma.item.findMany({ where: { fornecedorId: { not: null }, ativo: true }, select: { id: true, fornecedorId: true, precoCompra: true, loteMinimo: true } });
+  if (ligados.length) {
+    await prisma.fornecedorItem.createMany({
+      data: ligados.map((i) => ({ fornecedorId: i.fornecedorId, itemId: i.id, preco: i.precoCompra, compraMinima: i.loteMinimo })),
+      skipDuplicates: true,
+    });
+  }
   console.log("Carga inicial concluída.");
 }
 

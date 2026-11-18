@@ -206,6 +206,7 @@ model Item {
   lotes          Lote[]
   apontamentos   Apontamento[]
   processos      ProcessoProducao[]
+  ofertas        FornecedorItem[]
   criadoEm       DateTime           @default(now())
 }
 
@@ -260,7 +261,27 @@ model Fornecedor {
   pedidos          PedidoCompra[]
   precos           PrecoHistorico[]
   boletos          ContaPagar[]
+  ofertas          FornecedorItem[]
   criadoEm         DateTime         @default(now())
+}
+
+// O que cada fornecedor vende: preço, prazo de pagamento, prazo de entrega e compra mínima de cada matéria-prima.
+// Prazo vazio = usa o prazo geral do fornecedor. O fornecedor principal do item (Item.fornecedorId) é o que as compras usam.
+model FornecedorItem {
+  id               Int        @id @default(autoincrement())
+  fornecedorId     Int
+  fornecedor       Fornecedor @relation(fields: [fornecedorId], references: [id], onDelete: Cascade)
+  itemId           Int
+  item             Item       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  preco            Float? // R$ por unidade do item
+  prazoPagamento   String? // "28" ou "28/42/56"
+  prazoEntregaDias Int?
+  compraMinima     Float? // na unidade do item
+  observacao       String?
+  atualizadoEm     DateTime   @default(now()) @updatedAt
+  criadoEm         DateTime   @default(now())
+
+  @@unique([fornecedorId, itemId])
 }
 
 model PedidoVenda {

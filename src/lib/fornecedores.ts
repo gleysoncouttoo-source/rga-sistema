@@ -16,3 +16,13 @@ export async function fornecedorPorNome(nome: FormDataEntryValue | null, prazoEn
   const novo = await db.fornecedor.create({ data: { nome: n, ...(prazo != null ? { prazoEntregaDias: prazo } : {}) } });
   return novo.id;
 }
+
+/** Garante que o item aparece na lista do fornecedor (aba Fornecedores). Preço e compra mínima informados no cadastro do item atualizam a lista; prazos combinados ficam como estão. */
+export async function garantirOferta(fornecedorId: number | null, itemId: number, p: { preco?: number | null; compraMinima?: number | null } = {}) {
+  if (!fornecedorId) return;
+  await db.fornecedorItem.upsert({
+    where: { fornecedorId_itemId: { fornecedorId, itemId } },
+    update: { ...(p.preco != null ? { preco: p.preco } : {}), ...(p.compraMinima != null ? { compraMinima: p.compraMinima } : {}) },
+    create: { fornecedorId, itemId, preco: p.preco ?? null, compraMinima: p.compraMinima ?? null },
+  });
+}
