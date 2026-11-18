@@ -204,3 +204,25 @@ details.editar[open] > summary { margin-bottom: 10px; }
 .com-mini { display: flex; gap: 8px; align-items: center; }
 .com-mini .mini { width: 42px; height: 42px; }
 .com-mini select { flex: 1; }
+.ir-para { flex-direction: row; align-items: center; gap: 8px; }
+.ir-para select { min-height: 40px; min-width: 220px; }
+@media (max-width: 760px) { .so-pc { display: none; } }
+/* Lista suspensa com miniatura de foto */
+.sf { position: relative; width: 100%; font-weight: 400; color: var(--texto); }
+.sf-botao { width: 100%; display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 4px 10px 4px 6px; background: var(--card); border: 1px solid var(--borda); border-radius: 8px; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.sf-botao:focus-visible, .sf-botao[aria-expanded=true] { outline: 2px solid var(--acento); outline-offset: -1px; }
+.sf-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.sf-txt b, .sf-txt small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sf-txt b { font-weight: 600; font-size: .9rem; }
+.sf-txt small { color: var(--suave); font-size: .78rem; }
+.sf-vazio { color: var(--suave); padding-left: 6px; }
+.sf-seta { color: var(--suave); font-size: .8rem; }
+.sf-mini { width: 32px; height: 32px; border-radius: 6px; background: var(--linha); border: 1px solid var(--borda); overflow: hidden; flex-shrink: 0; }
+.sf-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sf-lista { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px); max-height: 320px; overflow-y: auto; background: var(--card); border: 1px solid var(--borda); border-radius: 8px; box-shadow: 0 10px 28px rgba(24, 26, 29, .16); padding: 4px; }
+.sf-busca { width: 100%; min-height: 36px !important; margin-bottom: 4px; }
+.sf-grupo { font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--suave); padding: 8px 8px 4px; }
+.sf-op { width: 100%; display: flex; align-items: center; gap: 8px; padding: 4px 6px; border: 0; background: none; border-radius: 6px; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.sf-op:hover { background: var(--bg); }
+.sf-op.sel { background: var(--acento-claro); }
+.sf-op:disabled { opacity: .45; cursor: default; }
