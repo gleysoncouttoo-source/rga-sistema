@@ -149,11 +149,11 @@ export default async function Usuarios({ searchParams }: { searchParams: Promise
           <form action={liberarCadastro}>
             <input type="hidden" name="id" value={x.id} />
             <p style={{ marginTop: 0 }}>
-              <b>{x.nome}</b> · {x.email} · pediu como <b>{x.cargoPedido ?? "—"}</b>
+              <b>{x.nome}</b> · {x.email}
               <span className="suave"> · {x.criadoEm.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" })}</span>
             </p>
             <div className="campos">
-              <label>Cargo (perfil)<select name="perfil" defaultValue={perfilPorNome(x.cargoPedido)}>{opcoesPerfil}</select></label>
+              <label>Cargo (perfil)<select name="perfil" defaultValue={perfilPorNome("Colaborador")}>{opcoesPerfil}</select></label>
               <label>Funcionário ligado (opcional)
                 <select name="funcionario"><option value="">—</option>{funcs.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}</select>
               </label>
