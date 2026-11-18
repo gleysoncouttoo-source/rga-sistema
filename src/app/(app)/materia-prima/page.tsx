@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { auditar, exigir } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { registrarPreco } from "@/lib/precos";
-import { fornecedorPorNome } from "@/lib/fornecedores";
+import { fornecedorPorNome, garantirOferta } from "@/lib/fornecedores";
 import { dia } from "@/lib/datas";
 import { brl, num, qtd } from "@/lib/formato";
 import Excluir from "@/components/Excluir";
@@ -33,6 +33,7 @@ async function nova(form: FormData) {
         precoCompra: preco, estoque, estoqueMinimo: nn(form.get("estoqueMinimo")), fornecedorId, foto: txt(form.get("foto")),
       },
     });
+    await garantirOferta(it.fornecedorId, it.id, { preco });
     if (estoque) await db.movimentoEstoque.create({ data: { itemId: it.id, quantidade: estoque, motivo: "Estoque inicial", usuario: u.nome } });
     if (preco) await db.$transaction((tx) => registrarPreco(tx, { itemId: it.id, preco, data: dia(), origem: "manual", fornecedorId: it.fornecedorId, usuario: u.nome }));
   } catch {
@@ -55,6 +56,7 @@ async function editar(form: FormData) {
       pesoUnitKg: form.get("pesoUnitKg") ? nn(form.get("pesoUnitKg")) : null, precoCompra: preco, estoqueMinimo: nn(form.get("estoqueMinimo")),
       ...(form.has("foto") ? { foto: txt(form.get("foto")) } : {}) },
   });
+  if (preco && preco !== antes.precoCompra) await garantirOferta(antes.fornecedorId, id, { preco });
   if (preco && preco !== antes.precoCompra) await db.$transaction((tx) => registrarPreco(tx, { itemId: id, preco, data: dia(), origem: "manual", fornecedorId: antes.fornecedorId, usuario: u.nome }));
   revalidatePath("/materia-prima");
   volta("ok", "Salvo.");
@@ -90,7 +92,7 @@ export default async function MateriaPrima({ searchParams }: { searchParams: Pro
   const u = await exigir("estoque");
   const sp = await searchParams;
   const [lista, fornecedores] = await Promise.all([
-    db.item.findMany({ where: { ativo: true, tipo: "materia_prima" }, include: { fornecedor: true, _count: { select: { usadoEm: true } } }, orderBy: [{ material: "asc" }, { nome: "asc" }] }),
+    db.item.findMany({ where: { ativo: true, tipo: "materia_prima" }, include: { fornecedor: true, _count: { select: { usadoEm: true, ofertas: true } } }, orderBy: [{ material: "asc" }, { nome: "asc" }] }),
     db.fornecedor.findMany({ where: { ativo: true }, orderBy: { nome: "asc" } }),
   ]);
   const cria = pode(u.permissoes, "estoque", "criar"), edita = pode(u.permissoes, "estoque", "editar"), exclui = pode(u.permissoes, "estoque", "excluir");
@@ -129,7 +131,7 @@ export default async function MateriaPrima({ searchParams }: { searchParams: Pro
                 <td className="n">{brl(i.precoCompra)}<span className="suave">/{i.unidade}</span></td>
                 <td className="n">{brl(valor(i))}</td>
                 <td className="n">{i.estoqueMinimo ? qtd(i.estoqueMinimo, i.unidade) : "—"}{baixo && <div><span className="selo erro">abaixo</span></div>}</td>
-                <td>{i.fornecedor?.nome ?? <span className="suave">—</span>}</td>
+                <td>{i.fornecedor?.nome ?? <span className="suave">—</span>}{i._count.ofertas > (i.fornecedorId ? 1 : 0) && <div className="suave">{i._count.ofertas} fornecedores</div>}</td>
                 {(edita || exclui) && (
                   <td style={{ minWidth: 220 }}>
                     {edita && (

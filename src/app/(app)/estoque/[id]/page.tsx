@@ -7,7 +7,7 @@ import { auditar, exigir } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { custoMaterial, saldos } from "@/lib/planejamento";
 import { registrarPreco } from "@/lib/precos";
-import { fornecedorPorNome } from "@/lib/fornecedores";
+import { fornecedorPorNome, garantirOferta } from "@/lib/fornecedores";
 import { dia } from "@/lib/datas";
 import { brl, dataDia, dataHora, qtd } from "@/lib/formato";
 import { TIPOS } from "@/lib/rotulos";
@@ -34,6 +34,7 @@ async function salvar(form: FormData) {
       ...(form.has("foto") ? { foto: String(form.get("foto") || "") || null } : {}),
     },
   });
+  if (origem === "comprado") await garantirOferta(fornecedorId, id, { preco: novoPreco, compraMinima: form.get("loteMinimo") ? n(form.get("loteMinimo")) : null });
   // preço de compra alterado à mão entra no histórico de preços
   if (antes.origem === "comprado" && novoPreco && novoPreco !== antes.precoCompra) {
     await db.$transaction((tx) => registrarPreco(tx, { itemId: id, preco: novoPreco, data: dia(), origem: "manual", fornecedorId, usuario: u.nome }));
@@ -79,6 +80,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
         precos: { include: { fornecedor: true }, orderBy: { data: "desc" }, take: 20 },
         reservas: { include: { pedidoVenda: true } },
         fornecedor: true,
+        ofertas: { where: { fornecedor: { ativo: true } }, include: { fornecedor: true }, orderBy: { preco: "asc" } },
       },
     }),
     db.item.findMany({ where: { ativo: true }, include: { componentes: true }, orderBy: [{ tipo: "asc" }, { nome: "asc" }] }),
@@ -182,6 +184,29 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
               <label className="inteiro">Observação<input name="obs" defaultValue={it.observacao ?? ""} /></label>
               <div className="inteiro"><button className="btn">Salvar</button></div>
             </form>
+          </div>
+        </>
+      )}
+
+      {it.origem === "comprado" && (
+        <>
+          <h2>Quem vende</h2>
+          <div className="card tabela">
+            {it.ofertas.length === 0 ? <p className="suave" style={{ margin: 0 }}>Nenhum fornecedor ligado. Ligue em <Link href="/compras/fornecedores">Compras → Fornecedores</Link>.</p> : (
+              <table>
+                <thead><tr><th>Fornecedor</th><th className="n">Preço</th><th>Pagamento</th><th>Entrega</th><th className="n">Compra mínima</th><th></th></tr></thead>
+                <tbody>{it.ofertas.map((o) => (
+                  <tr key={o.id}>
+                    <td><Link href={`/compras/fornecedores/${o.fornecedorId}`}><b>{o.fornecedor.nome}</b></Link></td>
+                    <td className="n">{o.preco != null ? `${brl(o.preco)}/${it.unidade}` : "—"}</td>
+                    <td>{o.prazoPagamento ?? o.fornecedor.prazoPagamento} dias</td>
+                    <td>{o.prazoEntregaDias ?? o.fornecedor.prazoEntregaDias} dias</td>
+                    <td className="n">{o.compraMinima ? qtd(o.compraMinima, it.unidade) : "—"}</td>
+                    <td>{o.fornecedorId === it.fornecedorId && <span className="selo ok">Principal</span>}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            )}
           </div>
         </>
       )}
