@@ -54,6 +54,7 @@ async function adicionar(form: FormData) {
     formaPagamento: txt(form, "forma"), codigoBarras: txt(form, "codigo")?.replace(/[^0-9]/g, "") || null,
     chavePix: txt(form, "pix") ?? forn?.chavePix ?? null, favorecido: txt(form, "favorecido") ?? forn?.nome ?? null,
     bancoRecebedor: txt(form, "bancoRec") ?? forn?.banco ?? null, agencia: txt(form, "agencia"), contaRecebedor: txt(form, "contaRec"), documento: txt(form, "documento") ?? forn?.cnpj ?? null,
+    notaFiscal: txt(form, "nota"), emailContato: txt(form, "emailContato"), whatsContato: txt(form, "whatsContato"),
   };
   const repetir = form.get("repetir") === "mensal";
   const parcelas = Math.min(60, Math.max(1, Number(form.get("parcelas")) || 1));
@@ -94,6 +95,7 @@ async function acaoConta(form: FormData) {
         formaPagamento: txt(form, "forma"), favorecido: txt(form, "favorecido"), chavePix: txt(form, "pix"),
         codigoBarras: txt(form, "codigo")?.replace(/[^0-9]/g, "") || null, observacao: txt(form, "obs"),
         bancoRecebedor: txt(form, "bancoRec"), agencia: txt(form, "agencia"), contaRecebedor: txt(form, "contaRec"), documento: txt(form, "documento"),
+        notaFiscal: txt(form, "nota"), emailContato: txt(form, "emailContato"), whatsContato: txt(form, "whatsContato"),
       },
     });
   }
@@ -143,7 +145,7 @@ export default async function Financeiro({ searchParams }: { searchParams: Promi
   const perto = { gte: somaDias(sel, -4), lte: somaDias(sel, 1) };
   const [linhas, pagarDia, receberDia, vencidas, fixas, fornecedores, nSal, cfg] = await Promise.all([
     linhasFluxo(gradeIni, gradeFim, true),
-    db.contaPagar.findMany({ where: { status: { in: ["aberto", "pago", "previsto"] }, OR: [{ vencimento: perto }, { pagoEm: { gte: somaDias(sel, -1), lte: somaDias(sel, 1) } }] }, include: { fornecedor: true, pedidoCompra: { include: { itens: { include: { item: true } } } } }, orderBy: [{ categoria: "asc" }, { descricao: "asc" }] }),
+    db.contaPagar.findMany({ where: { status: { in: ["aberto", "pago", "previsto"] }, OR: [{ vencimento: perto }, { pagoEm: { gte: somaDias(sel, -1), lte: somaDias(sel, 1) } }] }, include: { fornecedor: true, comprovantes: { select: { id: true } }, pedidoCompra: { include: { itens: { include: { item: true } } } } }, orderBy: [{ categoria: "asc" }, { descricao: "asc" }] }),
     db.contaReceber.findMany({ where: { status: { in: ["aberto", "recebido"] }, OR: [{ vencimento: perto }, { recebidoEm: { gte: somaDias(sel, -1), lte: somaDias(sel, 1) } }] }, orderBy: { descricao: "asc" } }),
     db.contaPagar.findMany({ where: { status: "aberto", vencimento: { lt: hoje } }, orderBy: { vencimento: "asc" } }).then((l) => l.filter((c) => diaDoPagamento(c.vencimento) < hoje)),
     db.contaRecorrente.findMany({ where: { ativo: true }, orderBy: { dia: "asc" } }),
@@ -234,6 +236,9 @@ export default async function Financeiro({ searchParams }: { searchParams: Promi
             <label>Banco do favorecido<input name="bancoRec" placeholder="ex.: Itaú (341)" /></label>
             <label>Agência<input name="agencia" inputMode="numeric" /></label>
             <label>Conta<input name="contaRec" placeholder="ex.: 12345-6" /></label>
+            <label>Nota fiscal<input name="nota" placeholder="nº da nota" /></label>
+            <label>E-mail de quem recebe<input name="emailContato" type="email" placeholder="para mandar o comprovante" /></label>
+            <label>WhatsApp de quem recebe<input name="whatsContato" inputMode="tel" placeholder="para mandar o comprovante" /></label>
             <label className="inteiro">Observação<input name="obs" /></label>
             <div className="inteiro acoes"><button className="btn">Salvar</button><a className="btn sec" href={`${url}#dia`}>Cancelar</a></div>
           </form>
@@ -355,6 +360,9 @@ export default async function Financeiro({ searchParams }: { searchParams: Promi
                         <label>Banco do favorecido<input name="bancoRec" defaultValue={c.bancoRecebedor ?? ""} /></label>
                         <label>Agência<input name="agencia" defaultValue={c.agencia ?? ""} /></label>
                         <label>Conta<input name="contaRec" defaultValue={c.contaRecebedor ?? ""} /></label>
+                        <label>Nota fiscal<input name="nota" defaultValue={c.notaFiscal ?? ""} /></label>
+                        <label>E-mail de quem recebe<input name="emailContato" type="email" defaultValue={c.emailContato ?? ""} /></label>
+                        <label>WhatsApp de quem recebe<input name="whatsContato" inputMode="tel" defaultValue={c.whatsContato ?? ""} /></label>
                         <label className="inteiro">Observação<input name="obs" defaultValue={c.observacao ?? ""} /></label>
                         <div className="inteiro"><button className="btn peq">Salvar</button></div>
                       </form>
@@ -372,6 +380,7 @@ export default async function Financeiro({ searchParams }: { searchParams: Promi
                     </div>
                   )}
                   {edita && c.status === "pago" && <form action={acaoConta}><input type="hidden" name="id" value={c.id} /><input type="hidden" name="a" value="desfazer" /><span className="selo ok">pago</span> <button className="btn sec peq">Desfazer</button></form>}
+                  {c.status === "pago" && <div style={{ marginTop: 6 }}><a href={`/financeiro/historico?id=${c.id}#p${c.id}`} style={{ fontSize: ".82rem" }}>{c.comprovantes.length ? "ver comprovante" : "anexar comprovante"}</a></div>}
                 </td>
               </tr>
             );
