@@ -100,9 +100,13 @@ async function ligarCusto(itemId: number) {
 }
 
 export async function acaoPasso(form: FormData) {
-  const u = await exigir("produtos", "editar");
+  const u = await exigirAlgum([["produtos", "editar"], ["producao", "editar"]]);
   const itemId = nn(form.get("itemId")), pagina = nn(form.get("pagina")) || itemId;
   const acao = String(form.get("acao"));
+  // de onde veio (página de Produtos ou Produção → Processos das peças)
+  const v = String(form.get("volta") || "");
+  const destino = v.startsWith("/") && !v.startsWith("//") ? v : `/produtos/${pagina}`;
+  const sai = (k: "erro" | "ok", m: string) => redirect(`${destino}${destino.includes("?") ? "&" : "?"}${k}=` + encodeURIComponent(m));
   if (acao === "add") {
     let operacaoId = nn(form.get("operacaoId"));
     const nome = txt(form.get("novaOperacao")), etapaId = nn(form.get("etapaId"));
@@ -110,14 +114,35 @@ export async function acaoPasso(form: FormData) {
       const op = await db.operacao.upsert({ where: { etapaId_nome: { etapaId, nome } }, update: { ativo: true }, create: { etapaId, nome } });
       operacaoId = op.id;
     }
-    if (!operacaoId) volta(pagina, "erro", "Escolha uma operação ou escreva o nome de uma nova (com a etapa).");
+    if (!operacaoId) sai("erro", "Escolha uma operação ou escreva o nome de uma nova (com a etapa).");
     const ult = await db.passo.findFirst({ where: { itemId }, orderBy: { ordem: "desc" } });
     await db.passo.create({ data: { itemId, operacaoId, ordem: (ult?.ordem ?? 0) + 1 } });
   } else if (acao === "remover") {
     const id = nn(form.get("passoId"));
     const usado = (await db.apontamento.count({ where: { passoId: id } })) + (await db.processoProducao.count({ where: { passoId: id, status: "andamento" } }));
-    if (usado) volta(pagina, "erro", "Esse processo já tem produção lançada. Não dá para tirar (o histórico dos lotes usa ele).");
+    if (usado) sai("erro", "Esse processo já tem produção lançada. Não dá para tirar (o histórico dos lotes usa ele).");
     await db.passo.delete({ where: { id } });
+  } else if (acao === "editar") {
+    // muda o nome/etapa da operação deste passo. Se outras peças usam a mesma operação, cria uma nova só para esta peça.
+    const id = nn(form.get("passoId")), nome = txt(form.get("nome")), etapaId = nn(form.get("etapaId"));
+    if (!nome || !etapaId) sai("erro", "Informe o nome e a etapa do processo.");
+    const passo = await db.passo.findUniqueOrThrow({ where: { id }, include: { operacao: true } });
+    const op = passo.operacao;
+    if (op.nome !== nome || op.etapaId !== etapaId) {
+      const outros = await db.passo.count({ where: { operacaoId: op.id, id: { not: id } } });
+      const aps = await db.apontamento.count({ where: { operacaoId: op.id } });
+      const existente = await db.operacao.findUnique({ where: { etapaId_nome: { etapaId, nome: nome! } } });
+      if (existente) {
+        // já existe uma operação com esse nome nessa etapa: passa a usar ela
+        if (existente.id !== op.id) await db.passo.update({ where: { id }, data: { operacaoId: existente.id } });
+      } else if (outros || aps) {
+        // não mexe no recorde/histórico das outras peças: nova operação só para esta
+        const nova = await db.operacao.create({ data: { etapaId, nome: nome! } });
+        await db.passo.update({ where: { id }, data: { operacaoId: nova.id } });
+      } else {
+        await db.operacao.update({ where: { id: op.id }, data: { nome: nome!, etapaId } });
+      }
+    }
   } else if (acao === "subir" || acao === "descer") {
     const id = nn(form.get("passoId"));
     const ps = await db.passo.findMany({ where: { itemId }, orderBy: { ordem: "asc" } });
@@ -130,5 +155,6 @@ export async function acaoPasso(form: FormData) {
   await renumerar(itemId);
   await ligarCusto(itemId);
   await auditar(u.nome, "alterou processo", `item #${itemId}`);
+  revalidatePath(destino.split("?")[0]);
   revalidatePath(`/produtos/${pagina}`);
 }

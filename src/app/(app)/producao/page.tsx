@@ -10,6 +10,7 @@ import { acaoCancelarCronometro, acaoExcluirApontamento, acaoFinalizar, acaoPaus
 import Cronometro from "@/components/Cronometro";
 import Excluir from "@/components/Excluir";
 import Trilha from "@/components/Trilha";
+import AbasProducao from "@/components/AbasProducao";
 
 async function decidir(form: FormData) {
   "use server";
@@ -86,10 +87,11 @@ export default async function Producao({ searchParams }: { searchParams: Promise
         <h1 style={{ margin: 0 }}>Produção</h1>
         <div className="acoes">
           <a className="btn sec" href="/estoque-parcial">Estoque parcial</a>
-          <a className="btn sec" href="/apontar">Tela do celular</a>
-          {cria && <a className="btn" href="/producao/novo">+ Iniciar novo processo</a>}
+          {cria && <a className="btn sec" href="/producao/novo">+ Iniciar novo processo</a>}
+          <a className="btn" href="/apontar">Apontar produção</a>
         </div>
       </div>
+      <AbasProducao ativo="producao" />
       {erro && <div className="aviso erro">{erro}</div>}
       {ok && <div className="aviso ok">{ok}</div>}
 
