@@ -19,7 +19,7 @@ export const ABAS = [
   { id: "materia-prima", nome: "Matéria-prima", href: "/materia-prima", modulo: "estoque" },
   { id: "producao", nome: "Produção", href: "/producao", modulo: "producao" },
   { id: "estoque-parcial", nome: "Estoque parcial", href: "/estoque-parcial", modulo: "producao" },
-  { id: "estoque", nome: "Estoque", href: "/estoque", modulo: "estoque" },
+  { id: "estoque", nome: "Estoque final", href: "/estoque", modulo: "estoque" },
   { id: "vendas", nome: "Vendas", href: "/vendas", modulo: "vendas" },
   { id: "compras", nome: "Compras", href: "/compras", modulo: "compras" },
   { id: "financeiro", nome: "Financeiro", href: "/financeiro", modulo: "financeiro" },
@@ -30,6 +30,31 @@ export const ABAS = [
   { id: "usuarios", nome: "Usuários e perfis", href: "/usuarios", modulo: "usuarios" },
   { id: "apontar", nome: "Apontar produção", href: "/apontar", modulo: null },
 ] as const;
+
+/** Menu lateral enxuto: cada item junta abas; as abas de dentro aparecem no alto da tela. */
+export const GRUPOS_MENU: { nome: string; abas: string[] }[] = [
+  { nome: "Painel", abas: ["painel"] },
+  { nome: "Produtos", abas: ["produtos"] },
+  { nome: "Produção", abas: ["producao", "apontar"] },
+  { nome: "Estoque", abas: ["materia-prima", "estoque-parcial", "estoque"] },
+  { nome: "Vendas", abas: ["vendas"] },
+  { nome: "Compras", abas: ["compras"] },
+  { nome: "Financeiro", abas: ["financeiro", "custos", "lucros"] },
+  { nome: "Colaboradores", abas: ["funcionarios"] },
+  { nome: "Histórico", abas: ["historico"] },
+  { nome: "Usuários e perfis", abas: ["usuarios"] },
+];
+
+export type ItemMenu = { nome: string; abas: { href: string; nome: string }[] };
+
+/** Monta o menu a partir das abas que o login vê; grupo sem nenhuma aba some. */
+export function menuDoUsuario(visiveis: { id: string; href: string; nome: string }[]): ItemMenu[] {
+  const porId = new Map(visiveis.map((a) => [a.id, a]));
+  const usadas = new Set(GRUPOS_MENU.flatMap((g) => g.abas));
+  const grupos = GRUPOS_MENU.map((g) => ({ nome: g.nome, abas: g.abas.map((id) => porId.get(id)).filter((a) => !!a).map((a) => ({ href: a!.href, nome: a!.nome })) }));
+  const soltas = visiveis.filter((a) => !usadas.has(a.id)).map((a) => ({ nome: a.nome, abas: [{ href: a.href, nome: a.nome }] }));
+  return [...grupos, ...soltas].filter((g) => g.abas.length > 0);
+}
 
 export function lerAbasOcultas(json: string | null | undefined): string[] {
   try { const v = JSON.parse(json || "[]"); return Array.isArray(v) ? v.map(String) : []; } catch { return []; }
