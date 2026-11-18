@@ -47,7 +47,7 @@ export default async function Estoque({ searchParams }: { searchParams: Promise<
   const exclui = pode(u.permissoes, "estoque", "excluir");
   return (
     <>
-      <h1>Estoque</h1>
+      <h1>Estoque final</h1>
       {sp.erro && <div className="aviso erro">{sp.erro}</div>}
       {sp.ok && <div className="aviso ok">{sp.ok}</div>}
       {abaixo.length > 0 && !sp.baixo && <div className="aviso alerta">{abaixo.length} item(ns) abaixo do estoque mínimo. <Link href="/estoque?baixo=1">Ver</Link></div>}
