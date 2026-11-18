@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { entrar, usuarioAtual } from "@/lib/auth";
 import { db } from "@/lib/db";
+import MarcaCentro from "@/components/MarcaCentro";
 
 async function acaoEntrar(form: FormData) {
   "use server";
@@ -15,6 +16,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
   const { erro } = await searchParams;
   return (
     <main className="centro">
+      <MarcaCentro />
       <div className="caixa card">
         <h1>Sistema R.G.A</h1>
         <p className="suave">Entre com seu e-mail e senha.</p>

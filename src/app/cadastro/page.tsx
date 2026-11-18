@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { auditar, usuarioAtual } from "@/lib/auth";
+import MarcaCentro from "@/components/MarcaCentro";
 
 const CARGOS = ["Colaborador", "Gestor", "Diretor"];
 const MAX_PENDENTES = 30; // evita que alguém encha a lista de pedidos
@@ -35,6 +36,7 @@ export default async function Cadastro({ searchParams }: { searchParams: Promise
   const { erro, ok } = await searchParams;
   return (
     <main className="centro">
+      <MarcaCentro />
       <div className="caixa card">
         <h1>Criar conta</h1>
         {ok ? (
