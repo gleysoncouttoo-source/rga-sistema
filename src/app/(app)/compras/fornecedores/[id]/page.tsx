@@ -4,27 +4,21 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { auditar, exigir } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
-import { lerPrazos } from "@/lib/planejamento";
 import { registrarPreco } from "@/lib/precos";
 import { dia } from "@/lib/datas";
-import { brl, data, qtd } from "@/lib/formato";
+import { brl, data, dataDia, qtd } from "@/lib/formato";
+import { dadosFornecedor, numeroBr, opcoesItensCompra, prazosTexto } from "@/lib/fornecedores";
+import { diasEntre } from "@/lib/datas";
+import FormFornecedor from "@/components/FormFornecedor";
 import { TIPOS } from "@/lib/rotulos";
 import AbasCompras from "@/components/AbasCompras";
 import CampoFoto from "@/components/CampoFoto";
 import Excluir from "@/components/Excluir";
 import IrPara from "@/components/IrPara";
 
-/** Número digitado do jeito brasileiro: "9,50", "1.000", "1.000,5" ou "9.5". */
-const nn = (v: FormDataEntryValue | null) => {
-  let s = String(v ?? "").trim().replace(/\s/g, "");
-  if (!s) return null;
-  if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
-  else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, ""); // 1.000 = mil
-  const x = Number(s);
-  return Number.isFinite(x) && x >= 0 ? x : null;
-};
+const nn = numeroBr;
 const txt = (v: FormDataEntryValue | null) => String(v ?? "").trim() || null;
-const prazoPg = (v: FormDataEntryValue | null) => (txt(v) ? lerPrazos(String(v)).join("/") : null);
+const prazoPg = prazosTexto;
 const prazoEnt = (v: FormDataEntryValue | null) => { const x = nn(v); return x == null ? null : Math.round(x); };
 const volta = (id: number, k: "ok" | "erro", m: string): never => redirect(`/compras/fornecedores/${id}?${k}=` + encodeURIComponent(m));
 
@@ -45,17 +39,10 @@ async function salvarDados(form: FormData) {
   "use server";
   const u = await exigir("compras", "editar");
   const id = Number(form.get("id"));
-  const nome = String(form.get("nome") || "").trim();
-  if (!nome) volta(id, "erro", "Informe o nome.");
-  await db.fornecedor.update({
-    where: { id },
-    data: {
-      nome, cnpj: txt(form.get("cnpj")), contato: txt(form.get("contato")), telefone: txt(form.get("telefone")), email: txt(form.get("email")),
-      chavePix: txt(form.get("chavePix")), banco: txt(form.get("bancoDados")), observacao: txt(form.get("obs")),
-      prazoPagamento: lerPrazos(String(form.get("prazoPagamento"))).join("/"), prazoEntregaDias: prazoEnt(form.get("prazoEntregaDias")) ?? 0,
-    },
-  });
-  await auditar(u.nome, "editou fornecedor", nome);
+  const dados = dadosFornecedor(form);
+  if (!dados.nome) volta(id, "erro", "Informe o nome.");
+  await db.fornecedor.update({ where: { id }, data: dados });
+  await auditar(u.nome, "editou fornecedor", dados.nome);
   revalidatePath("/compras/fornecedores");
   volta(id, "ok", "Dados salvos.");
 }
@@ -82,7 +69,7 @@ async function adicionar(form: FormData) {
   const it = await db.item.findUniqueOrThrow({ where: { id: itemId } });
   const dados = {
     preco: nn(form.get("preco")), prazoPagamento: prazoPg(form.get("prazoPagamento")), prazoEntregaDias: prazoEnt(form.get("prazoEntregaDias")),
-    compraMinima: nn(form.get("compraMinima")), observacao: txt(form.get("obs")),
+    compraMinima: nn(form.get("compraMinima")), codigoFornecedor: txt(form.get("codigo")), observacao: txt(form.get("obs")),
   };
   await db.fornecedorItem.upsert({ where: { fornecedorId_itemId: { fornecedorId, itemId } }, update: dados, create: { fornecedorId, itemId, ...dados } });
   // item sem fornecedor passa a comprar deste
@@ -99,7 +86,7 @@ async function editar(form: FormData) {
   const of = await db.fornecedorItem.findUniqueOrThrow({ where: { id: Number(form.get("ofertaId")) }, include: { item: true } });
   await db.fornecedorItem.update({
     where: { id: of.id },
-    data: { preco: nn(form.get("preco")), prazoPagamento: prazoPg(form.get("prazoPagamento")), prazoEntregaDias: prazoEnt(form.get("prazoEntregaDias")), compraMinima: nn(form.get("compraMinima")), observacao: txt(form.get("obs")) },
+    data: { preco: nn(form.get("preco")), prazoPagamento: prazoPg(form.get("prazoPagamento")), prazoEntregaDias: prazoEnt(form.get("prazoEntregaDias")), compraMinima: nn(form.get("compraMinima")), codigoFornecedor: txt(form.get("codigo")), observacao: txt(form.get("obs")) },
   });
   await sincronizarItem(of.fornecedorId, of.itemId, u.nome);
   revalidatePath(`/compras/fornecedores/${of.fornecedorId}`);
@@ -139,20 +126,20 @@ export default async function Fornecedor({ params, searchParams }: { params: Pro
     include: { ofertas: { where: { item: { ativo: true } }, include: { item: { include: { fornecedor: { select: { nome: true } } } } } } },
   });
   if (!f || !f.ativo) notFound();
-  const [todos, compraveis, outras] = await Promise.all([
-    db.fornecedor.findMany({ where: { ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
-    db.item.findMany({ where: { ativo: true, origem: "comprado", tipo: { not: "produto" } }, include: { fornecedor: { select: { nome: true } } }, orderBy: { nome: "asc" } }),
-    db.fornecedorItem.findMany({ where: { itemId: { in: f.ofertas.map((o) => o.itemId) }, fornecedorId: { not: id }, preco: { not: null }, fornecedor: { ativo: true } }, include: { fornecedor: { select: { nome: true } } } }),
-  ]);
-  const edita = pode(u.permissoes, "compras", "editar"), exclui = pode(u.permissoes, "compras", "excluir");
   const ofertas = [...f.ofertas].sort((a, b) => (ORDEM_TIPO.indexOf(a.item.tipo) - ORDEM_TIPO.indexOf(b.item.tipo)) || a.item.nome.localeCompare(b.item.nome));
   const jaTem = new Set(ofertas.map((o) => o.itemId));
-  const opcoes = [...compraveis]
-    .sort((a, b) => (ORDEM_TIPO.indexOf(a.tipo) - ORDEM_TIPO.indexOf(b.tipo)) || a.nome.localeCompare(b.nome))
-    .map((i) => ({
-      valor: String(i.id), titulo: i.nome, foto: i.foto, grupo: TIPOS[i.tipo] ?? i.tipo, desativada: jaTem.has(i.id),
-      sub: [i.codigo, i.unidade, jaTem.has(i.id) ? "já está na lista" : i.fornecedor ? `hoje compra de ${i.fornecedor.nome}` : "sem fornecedor"].filter(Boolean).join(" · "),
-    }));
+  const [todos, opcoes, outras, compras] = await Promise.all([
+    db.fornecedor.findMany({ where: { ativo: true }, select: { id: true, nome: true }, orderBy: { nome: "asc" } }),
+    opcoesItensCompra(jaTem),
+    db.fornecedorItem.findMany({ where: { itemId: { in: f.ofertas.map((o) => o.itemId) }, fornecedorId: { not: id }, preco: { not: null }, fornecedor: { ativo: true } }, include: { fornecedor: { select: { nome: true } } } }),
+    db.pedidoCompra.findMany({ where: { fornecedorId: id, status: { in: ["aprovado", "recebido"] } }, include: { itens: true }, orderBy: { dataCompra: "desc" } }),
+  ]);
+  const edita = pode(u.permissoes, "compras", "editar"), exclui = pode(u.permissoes, "compras", "excluir");
+  const recebidas = compras.filter((c) => c.status === "recebido" && c.recebidoEm);
+  const noPrazo = recebidas.filter((c) => diasEntre(dia(c.chegadaPrevista.toISOString()), dia(c.recebidoEm!)) <= 0).length;
+  const totalComprado = compras.reduce((s, c) => s + c.itens.reduce((t, i) => t + (i.quantidadeRecebida ?? i.quantidade) * (i.precoPago ?? i.precoUnitario ?? 0), 0), 0);
+  const wa = (f.whatsapp ?? "").replace(/\D/g, "");
+  const site = f.site ? (f.site.startsWith("http") ? f.site : `https://${f.site}`) : null;
   const melhorOutro = (itemId: number) => outras.filter((o) => o.itemId === itemId).sort((a, b) => a.preco! - b.preco!)[0];
 
   return (
@@ -165,9 +152,32 @@ export default async function Fornecedor({ params, searchParams }: { params: Pro
         <div>
           <Link href="/compras/fornecedores" className="suave">← Todos os fornecedores</Link>
           <h2 style={{ margin: "4px 0 0" }}>{f.nome}</h2>
-          <div className="suave">{[f.contato, f.telefone, f.email].filter(Boolean).join(" · ") || "sem contato cadastrado"}</div>
+          <div className="suave">{[f.categoria, f.razaoSocial !== f.nome ? f.razaoSocial : null].filter(Boolean).join(" · ")}</div>
         </div>
         <IrPara rotulo="Fornecedor" valor={`/compras/fornecedores/${f.id}`} opcoes={todos.map((x) => ({ href: `/compras/fornecedores/${x.id}`, nome: x.nome }))} />
+      </div>
+
+      <div className="grade">
+        <div className="kpi"><div className="r">Matérias-primas</div><div className="v">{ofertas.length}</div><div className="r">{ofertas.filter((o) => o.item.fornecedorId === f.id).length} compradas daqui</div></div>
+        <div className="kpi"><div className="r">Total comprado</div><div className="v">{brl(totalComprado, 0)}</div><div className="r">{compras.length} compra(s) aprovadas</div></div>
+        <div className="kpi"><div className="r">Chegou no prazo</div><div className="v">{recebidas.length ? `${Math.round((noPrazo / recebidas.length) * 100)}%` : "—"}</div><div className="r">{recebidas.length ? `${recebidas.length - noPrazo} com atraso` : "nenhuma entrega ainda"}</div></div>
+        <div className="kpi"><div className="r">Última compra</div><div className="v" style={{ fontSize: "1.3rem" }}>{compras[0] ? dataDia(compras[0].dataCompra) : "—"}</div><div className="r">pagamento {f.prazoPagamento} dias</div></div>
+      </div>
+
+      <div className="card">
+        <div className="ficha">
+          <div><small>Contato</small>{f.contato ?? "—"}</div>
+          <div><small>WhatsApp / telefone</small>{wa ? <a href={`https://wa.me/55${wa}`} target="_blank" rel="noreferrer">{f.whatsapp}</a> : null}{wa && f.telefone ? " · " : ""}{f.telefone}{!wa && !f.telefone && "—"}</div>
+          <div><small>E-mail</small>{f.email ? <a href={`mailto:${f.email}`}>{f.email}</a> : "—"}</div>
+          <div><small>Site</small>{site ? <a href={site} target="_blank" rel="noreferrer">{f.site}</a> : "—"}</div>
+          <div><small>CNPJ · IE</small>{[f.cnpj, f.inscricaoEstadual].filter(Boolean).join(" · ") || "—"}</div>
+          <div><small>Endereço</small>{[f.endereco, f.bairro, [f.cidade, f.uf].filter(Boolean).join("/"), f.cep].filter(Boolean).join(", ") || "—"}</div>
+          <div><small>Pagamento</small>{[f.formaPagamento, `${f.prazoPagamento} dias`].filter(Boolean).join(" · ")}</div>
+          <div><small>Entrega · frete</small>{f.prazoEntregaDias} dias{f.frete ? ` · ${f.frete}${f.frete === "FOB" && f.valorFrete != null ? ` (${brl(f.valorFrete)})` : f.frete === "CIF" ? " (fornecedor paga)" : ""}` : ""}</div>
+          <div><small>Pedido mínimo</small>{f.pedidoMinimo != null ? brl(f.pedidoMinimo) : "—"}</div>
+          <div><small>Pix · banco</small>{[f.chavePix, f.banco].filter(Boolean).join(" · ") || "—"}</div>
+          {f.observacao && <div style={{ gridColumn: "1 / -1" }}><small>Observações</small>{f.observacao}</div>}
+        </div>
       </div>
 
       <div className="card tabela">
@@ -199,7 +209,7 @@ export default async function Fornecedor({ params, searchParams }: { params: Pro
                 <tr key={o.id}>
                   <td style={{ minWidth: 240 }}>
                     <Link href={`/estoque/${it.id}`} className="com-foto"><span className="mini">{it.foto ? <img src={it.foto} alt="" /> : "sem foto"}</span>
-                      <span className="t"><b>{it.nome}</b><small>{[it.codigo, TIPOS[it.tipo]].filter(Boolean).join(" · ")}</small></span></Link>
+                      <span className="t"><b>{it.nome}</b><small>{[it.codigo, TIPOS[it.tipo]].filter(Boolean).join(" · ")}</small>{o.codigoFornecedor && <small>cód. no fornecedor: {o.codigoFornecedor}</small>}{o.observacao && <small>{o.observacao}</small>}</span></Link>
                   </td>
                   <td className="n" style={{ whiteSpace: "nowrap" }}>
                     {o.preco != null ? <><b>{brl(o.preco)}</b><span className="suave">/{it.unidade}</span></> : <span className="suave">—</span>}
@@ -228,7 +238,8 @@ export default async function Fornecedor({ params, searchParams }: { params: Pro
                           <label>Compra mínima ({it.unidade})<input name="compraMinima" inputMode="decimal" defaultValue={o.compraMinima ?? ""} /></label>
                           <label>Pagamento (dias)<input name="prazoPagamento" defaultValue={o.prazoPagamento ?? ""} placeholder={`${f.prazoPagamento} (geral)`} /></label>
                           <label>Entrega (dias)<input name="prazoEntregaDias" type="number" min={0} defaultValue={o.prazoEntregaDias ?? ""} placeholder={`${f.prazoEntregaDias} (geral)`} /></label>
-                          <label className="inteiro">Observação<input name="obs" defaultValue={o.observacao ?? ""} /></label>
+                          <label>Código no fornecedor<input name="codigo" defaultValue={o.codigoFornecedor ?? ""} /></label>
+                          <label>Observação<input name="obs" defaultValue={o.observacao ?? ""} /></label>
                           <div className="inteiro"><button className="btn peq">Salvar</button></div>
                         </form>
                         <div style={{ marginTop: 6 }}><Excluir acao={remover} campos={{ ofertaId: o.id }} texto="Tirar da lista" pergunta={`Tirar ${it.nome} da lista de ${f.nome}?${ehPrincipal ? " Ele é o fornecedor principal: o item fica sem fornecedor." : ""}`} /></div>
@@ -254,7 +265,8 @@ export default async function Fornecedor({ params, searchParams }: { params: Pro
             <label>Prazo de pagamento (dias)<input name="prazoPagamento" placeholder={`${f.prazoPagamento} ou 28/42/56`} /></label>
             <label>Prazo de entrega (dias)<input name="prazoEntregaDias" type="number" min={0} placeholder={`${f.prazoEntregaDias}`} /></label>
             <label>Compra mínima<input name="compraMinima" inputMode="decimal" placeholder="ex.: 500 (na unidade do item)" /></label>
-            <label className="inteiro">Observação<input name="obs" placeholder="ex.: frete grátis acima de 1 tonelada" /></label>
+            <label>Código no fornecedor<input name="codigo" placeholder="opcional" /></label>
+            <label>Observação<input name="obs" placeholder="ex.: frete grátis acima de 1 tonelada" /></label>
             <div className="inteiro"><button className="btn">Adicionar</button></div>
           </form>
           <p className="suave" style={{ marginBottom: 0 }}>Não achou na lista? Cadastre antes em <Link href="/materia-prima">Matéria-prima</Link>.</p>
@@ -262,21 +274,8 @@ export default async function Fornecedor({ params, searchParams }: { params: Pro
       )}
 
       <details className="card editar">
-        <summary>Dados do fornecedor</summary>
-        <form action={salvarDados} className="campos" style={{ marginTop: 12 }}>
-          <input type="hidden" name="id" value={f.id} />
-          <label>Nome<input name="nome" defaultValue={f.nome} required disabled={!edita} /></label>
-          <label>CNPJ<input name="cnpj" defaultValue={f.cnpj ?? ""} disabled={!edita} /></label>
-          <label>Contato<input name="contato" defaultValue={f.contato ?? ""} disabled={!edita} /></label>
-          <label>Telefone / WhatsApp<input name="telefone" defaultValue={f.telefone ?? ""} disabled={!edita} /></label>
-          <label>E-mail<input name="email" defaultValue={f.email ?? ""} disabled={!edita} /></label>
-          <label>Chave Pix<input name="chavePix" defaultValue={f.chavePix ?? ""} disabled={!edita} /></label>
-          <label>Banco / agência / conta<input name="bancoDados" defaultValue={f.banco ?? ""} disabled={!edita} /></label>
-          <label>Prazo de pagamento geral (dias)<input name="prazoPagamento" defaultValue={f.prazoPagamento} placeholder="28 ou 28/42/56" disabled={!edita} /></label>
-          <label>Prazo de entrega geral (dias)<input name="prazoEntregaDias" type="number" min={0} defaultValue={f.prazoEntregaDias} disabled={!edita} /></label>
-          <label>Observação<input name="obs" defaultValue={f.observacao ?? ""} disabled={!edita} /></label>
-          {edita && <div className="inteiro acoes"><button className="btn">Salvar dados</button></div>}
-        </form>
+        <summary>Editar dados do fornecedor</summary>
+        <div style={{ marginTop: 12 }}><FormFornecedor acao={salvarDados} inicial={f} textoBotao="Salvar dados" desabilitado={!edita} /></div>
         {exclui && <div style={{ marginTop: 10 }}><Excluir acao={excluir} campos={{ id: f.id }} texto="Excluir fornecedor" pergunta={`Excluir ${f.nome}? Os itens ligados ficam sem fornecedor.`} /></div>}
       </details>
     </>

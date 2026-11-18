@@ -1,33 +1,9 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { auditar, exigir } from "@/lib/auth";
+import { exigir } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
-import { lerPrazos } from "@/lib/planejamento";
+import { brl } from "@/lib/formato";
 import AbasCompras from "@/components/AbasCompras";
-
-async function criar(form: FormData) {
-  "use server";
-  const u = await exigir("compras", "editar");
-  const nome = String(form.get("nome") || "").trim().replace(/\s+/g, " ");
-  if (!nome) redirect("/compras/fornecedores?erro=" + encodeURIComponent("Informe o nome."));
-  const existe = await db.fornecedor.findFirst({ where: { nome: { equals: nome, mode: "insensitive" } } });
-  if (existe) {
-    if (!existe.ativo) await db.fornecedor.update({ where: { id: existe.id }, data: { ativo: true } });
-    redirect(`/compras/fornecedores/${existe.id}`);
-  }
-  const f = await db.fornecedor.create({
-    data: {
-      nome, telefone: String(form.get("telefone") || "").trim() || null,
-      prazoPagamento: lerPrazos(String(form.get("prazoPagamento") || "28")).join("/"),
-      prazoEntregaDias: Math.max(0, Number(form.get("prazoEntregaDias")) || 0),
-    },
-  });
-  await auditar(u.nome, "criou fornecedor", nome);
-  revalidatePath("/compras/fornecedores");
-  redirect(`/compras/fornecedores/${f.id}?ok=` + encodeURIComponent(`${nome} cadastrado. Agora adicione as matérias-primas que ele vende.`));
-}
 
 export default async function Fornecedores({ searchParams }: { searchParams: Promise<{ erro?: string; ok?: string }> }) {
   const u = await exigir("compras");
@@ -37,21 +13,28 @@ export default async function Fornecedores({ searchParams }: { searchParams: Pro
     include: { ofertas: { where: { item: { ativo: true } }, include: { item: { select: { nome: true, foto: true } } }, orderBy: { item: { nome: "asc" } } } },
     orderBy: { nome: "asc" },
   });
+  const cria = pode(u.permissoes, "compras", "editar");
   return (
     <>
       <h1>Compras</h1>
       <AbasCompras ativo="fornecedores" />
       {sp.erro && <div className="aviso erro">{sp.erro}</div>}
       {sp.ok && <div className="aviso ok">{sp.ok}</div>}
-      <p className="suave">Cada fornecedor com as matérias-primas que ele vende: preço, prazo de pagamento, prazo de entrega e compra mínima. Clique no fornecedor para ver e editar.</p>
+      <div className="acoes" style={{ justifyContent: "space-between", marginBottom: 12 }}>
+        <p className="suave" style={{ margin: 0, flex: "1 1 320px" }}>Cada fornecedor com os dados da empresa, contato, condições de pagamento e frete, e as matérias-primas que ele vende com preço, prazos e compra mínima.</p>
+        {cria && <Link className="btn" href="/compras/fornecedores/novo">+ Novo fornecedor</Link>}
+      </div>
       <div className="card tabela">
-        {lista.length === 0 ? <p className="suave">Nenhum fornecedor cadastrado ainda.</p> : (
+        {lista.length === 0 ? (
+          <p className="suave" style={{ margin: 0 }}>Nenhum fornecedor cadastrado ainda.{cria && <> Clique em <Link href="/compras/fornecedores/novo">Novo fornecedor</Link> para cadastrar o primeiro, já com as matérias-primas que ele vende.</>}</p>
+        ) : (
           <table>
-            <thead><tr><th>Fornecedor</th><th>Contato</th><th>Matérias-primas que vende</th><th>Pagamento</th><th>Entrega</th></tr></thead>
+            <thead><tr><th>Fornecedor</th><th>Cidade</th><th>Contato</th><th>Matérias-primas que vende</th><th>Pagamento</th><th>Entrega</th><th>Frete</th></tr></thead>
             <tbody>{lista.map((f) => (
               <tr key={f.id}>
-                <td><Link href={`/compras/fornecedores/${f.id}`}><b>{f.nome}</b></Link>{f.cnpj && <div className="suave">{f.cnpj}</div>}</td>
-                <td>{[f.contato, f.telefone].filter(Boolean).join(" · ") || <span className="suave">—</span>}</td>
+                <td><Link href={`/compras/fornecedores/${f.id}`}><b>{f.nome}</b></Link><div className="suave" style={{ fontSize: ".8rem" }}>{f.categoria ?? f.cnpj ?? ""}</div></td>
+                <td style={{ whiteSpace: "nowrap" }}>{[f.cidade, f.uf].filter(Boolean).join("/") || <span className="suave">—</span>}</td>
+                <td>{f.contato && <div>{f.contato}</div>}<div className="suave" style={{ fontSize: ".82rem" }}>{f.whatsapp ?? f.telefone ?? (f.contato ? "" : "—")}</div></td>
                 <td>
                   {f.ofertas.length ? (
                     <div className="fotos-linha">
@@ -60,25 +43,14 @@ export default async function Fornecedores({ searchParams }: { searchParams: Pro
                     </div>
                   ) : <span className="suave">nenhuma ainda</span>}
                 </td>
-                <td style={{ whiteSpace: "nowrap" }}>{f.prazoPagamento} dias</td>
+                <td style={{ whiteSpace: "nowrap" }}>{f.prazoPagamento} dias{f.formaPagamento && <div className="suave" style={{ fontSize: ".8rem" }}>{f.formaPagamento}</div>}</td>
                 <td style={{ whiteSpace: "nowrap" }}>{f.prazoEntregaDias} dias</td>
+                <td style={{ whiteSpace: "nowrap" }}>{f.frete ? <>{f.frete}{f.frete === "FOB" && f.valorFrete != null && <div className="suave" style={{ fontSize: ".8rem" }}>{brl(f.valorFrete)}</div>}</> : <span className="suave">—</span>}{f.pedidoMinimo != null && <div className="suave" style={{ fontSize: ".8rem" }}>mín. {brl(f.pedidoMinimo, 0)}</div>}</td>
               </tr>
             ))}</tbody>
           </table>
         )}
       </div>
-      {pode(u.permissoes, "compras", "editar") && (
-        <div className="card">
-          <b>Novo fornecedor</b>
-          <form action={criar} className="campos" style={{ marginTop: 12 }}>
-            <label>Nome<input name="nome" required /></label>
-            <label>Telefone / WhatsApp<input name="telefone" /></label>
-            <label>Prazo de pagamento geral (dias)<input name="prazoPagamento" defaultValue="28" placeholder="28 ou 28/42/56" /></label>
-            <label>Prazo de entrega geral (dias)<input name="prazoEntregaDias" type="number" min={0} defaultValue={7} /></label>
-            <div className="inteiro"><button className="btn">Cadastrar e adicionar matérias-primas</button></div>
-          </form>
-        </div>
-      )}
     </>
   );
 }
