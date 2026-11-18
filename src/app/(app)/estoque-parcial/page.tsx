@@ -1,17 +1,45 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { exigir } from "@/lib/auth";
+import { auditar, exigir } from "@/lib/auth";
+import { pode } from "@/lib/permissoes";
+import MontarConjunto from "@/components/MontarConjunto";
+import IrPara from "@/components/IrPara";
 import { saldosLotes } from "@/lib/fluxo";
 import { num } from "@/lib/formato";
-import { TIPOS } from "@/lib/rotulos";
+
+/** Montar conjunto: as partes escolhidas saem do estoque e o conjunto entra. */
+async function montar(form: FormData) {
+  "use server";
+  const u = await exigir("producao", "criar");
+  const conjuntoId = Number(form.get("conjuntoId")), qtd = Number(form.get("quantidade"));
+  let partes: { id: number; q: number }[] = [];
+  try { partes = JSON.parse(String(form.get("partes") || "[]")); } catch { /* vazio */ }
+  partes = partes.filter((x) => Number.isFinite(x.id) && x.q > 0);
+  if (!conjuntoId || !(qtd > 0)) redirect("/estoque-parcial?erro=" + encodeURIComponent("Escolha o conjunto e a quantidade."));
+  if (!partes.length) redirect("/estoque-parcial?erro=" + encodeURIComponent("Marque pelo menos uma parte."));
+  const conj = await db.item.findUnique({ where: { id: conjuntoId } });
+  if (!conj) redirect("/estoque-parcial?erro=" + encodeURIComponent("Conjunto não encontrado."));
+  const motivo = `Montagem de ${qtd} ${conj!.nome}`;
+  await db.$transaction([
+    ...partes.flatMap((x) => [
+      db.item.update({ where: { id: x.id }, data: { estoque: { increment: -x.q } } }),
+      db.movimentoEstoque.create({ data: { itemId: x.id, quantidade: -x.q, motivo, usuario: u.nome } }),
+    ]),
+    db.item.update({ where: { id: conjuntoId }, data: { estoque: { increment: qtd } } }),
+    db.movimentoEstoque.create({ data: { itemId: conjuntoId, quantidade: qtd, motivo, usuario: u.nome } }),
+  ]);
+  await auditar(u.nome, "montou conjunto", `${qtd} × ${conj!.nome} (${partes.length} parte(s))`);
+  redirect("/estoque-parcial?ok=" + encodeURIComponent(`${qtd} ${conj!.nome} montado(s). As partes saíram do estoque.`));
+}
 
 /** Estoque parcial: peças que já passaram por parte do processo e o que ainda falta para ficarem prontas. */
-export default async function EstoqueParcial({ searchParams }: { searchParams: Promise<{ produto?: string; todos?: string }> }) {
-  await exigir("producao");
+export default async function EstoqueParcial({ searchParams }: { searchParams: Promise<{ produto?: string; ver?: string; erro?: string; ok?: string }> }) {
+  const u = await exigir("producao");
   const sp = await searchParams;
   const produtoId = Number(sp.produto) || null;
   const [itens, lotes, produtos] = await Promise.all([
-    db.item.findMany({ where: { ativo: true, passos: { some: {} } }, include: { passos: { orderBy: { ordem: "asc" }, include: { operacao: true } }, componentes: true }, orderBy: [{ tipo: "asc" }, { codigo: "asc" }] }),
+    db.item.findMany({ where: { ativo: true, tipo: { in: ["conjunto", "peca"] } }, include: { passos: { orderBy: { ordem: "asc" }, include: { operacao: true } }, componentes: true }, orderBy: [{ tipo: "asc" }, { codigo: "asc" }] }),
     saldosLotes({ status: "aberto" }),
     db.item.findMany({ where: { ativo: true, tipo: "produto" }, select: { id: true, codigo: true, nome: true }, orderBy: { codigo: "asc" } }),
   ]);
@@ -41,41 +69,59 @@ export default async function EstoqueParcial({ searchParams }: { searchParams: P
     const total = espera.slice(0, -1).reduce((s, e) => s + e.qtd, 0);
     return { i, espera, total, lotes: ls.length, andamento: espera.reduce((s, e) => s + e.andamento, 0) };
   });
-  const mostrar = sp.todos ? linhas : linhas.filter((l) => l.total > 0 || l.andamento > 0 || l.lotes > 0);
+  const ver = sp.ver === "partes" || sp.ver === "conjuntos" ? sp.ver : "tudo";
   const totalPecas = linhas.reduce((s, l) => s + l.total, 0);
-  return (
+  const pecasMontar = itens.filter((i) => i.tipo === "peca").map((i) => ({ id: i.id, codigo: i.codigo, nome: i.nome, foto: i.foto, estoque: i.estoque }));
+  const conjMontar = itens.filter((i) => i.tipo === "conjunto").map((i) => ({ id: i.id, codigo: i.codigo, nome: i.nome, foto: i.foto, estoque: i.estoque, estrutura: i.componentes.map((c) => ({ filhoId: c.filhoId, quantidade: c.quantidade })) }));
+  const qs = (v: string, prod = produtoId) => `/estoque-parcial?ver=${v}${prod ? `&produto=${prod}` : ""}`;
+  const Tabela = ({ titulo, ls }: { titulo: string; ls: typeof linhas }) => (
     <>
-      <div className="topo">
-        <h1 style={{ margin: 0 }}>Estoque parcial</h1>
-        <form className="acoes" action="/estoque-parcial">
-          <select name="produto" defaultValue={produtoId ?? ""}><option value="">Todos os produtos</option>{produtos.map((p) => <option key={p.id} value={p.id}>{p.codigo} — {p.nome}</option>)}</select>
-          <label className="chk"><input type="checkbox" name="todos" value="1" defaultChecked={!!sp.todos} /> mostrar peças paradas</label>
-          <button className="btn sec">Filtrar</button>
-        </form>
-      </div>
-      <p className="suave">Peças que já passaram por parte do processo e estão esperando o próximo. <b>{num(totalPecas)}</b> peça(s) em processo no total. <b>Pronta</b> = já passou pelo último processo (estoque da peça).</p>
+      <h2>{titulo} ({ls.length})</h2>
       <div className="card tabela">
-        {mostrar.length === 0 ? <p className="suave">Nenhuma peça parada entre processos. Marque “mostrar peças paradas” para ver todas.</p> : (
+        {ls.length === 0 ? <p className="suave">Nada aqui.</p> : (
           <table>
-            <thead><tr><th>Peça</th><th className="n">Pronta</th><th className="n">Em processo</th><th>Onde estão e o que falta</th></tr></thead>
-            <tbody>{mostrar.map(({ i, espera, total, andamento }) => (
+            <thead><tr><th>{titulo === "Conjuntos" ? "Conjunto" : "Parte"}</th><th className="n">Pronta(s)</th><th className="n">Em processo</th><th className="so-pc">Onde estão e o que falta</th></tr></thead>
+            <tbody>{ls.map(({ i, espera, total, andamento }) => (
               <tr key={i.id}>
-                <td><Link href={`/produtos/${i.id}`} className="com-foto" style={{ color: "inherit" }}><span className="mini">{i.foto ? <img src={i.foto} alt="" /> : "sem foto"}</span><span className="t"><b>{i.nome}</b><small>{i.codigo} · {TIPOS[i.tipo]}</small></span></Link></td>
-                <td className="n"><b>{num(i.estoque)}</b></td>
-                <td className="n"><b style={{ color: total ? "var(--alerta)" : undefined }}>{num(total)}</b>{andamento > 0 && <div className="suave">⏱ {andamento} rodando</div>}</td>
-                <td>
+                <td><Link href={`/produtos/${i.id}`} className="com-foto" style={{ color: "inherit", textDecoration: "none" }}><span className="mini">{i.foto ? <img src={i.foto} alt="" /> : "sem foto"}</span><span className="t"><b>{i.nome}</b><small>{i.codigo}</small></span></Link></td>
+                <td className="n"><b style={{ color: i.estoque < 0 ? "var(--erro)" : undefined }}>{num(i.estoque)}</b></td>
+                <td className="n"><b style={{ color: total ? "var(--alerta)" : undefined }}>{total ? num(total) : "—"}</b>{andamento > 0 && <div className="suave">⏱ {andamento} rodando</div>}</td>
+                <td className="so-pc">
                   {espera.slice(0, -1).filter((e) => e.qtd > 0).map((e) => (
                     <div key={e.passo.id} style={{ marginBottom: 4 }}>
                       <b>{num(e.qtd)}</b> prontas de <b>{e.passo.operacao.nome}</b> · <span className="suave">faltam {i.passos.slice(e.k + 1).map((p) => p.operacao.nome).join(", ")}</span>
                     </div>
                   ))}
-                  {total === 0 && <span className="suave">Processo: {i.passos.map((p) => p.operacao.nome).join(" → ")}</span>}
+                  {total === 0 && <span className="suave">{i.passos.length ? `Processo: ${i.passos.map((p) => p.operacao.nome).join(" → ")}` : "sem processo cadastrado"}</span>}
                 </td>
               </tr>
             ))}</tbody>
           </table>
         )}
       </div>
+    </>
+  );
+  return (
+    <>
+      <h1>Estoque parcial</h1>
+      {sp.erro && <div className="aviso erro">{sp.erro}</div>}
+      {sp.ok && <div className="aviso ok">{sp.ok}</div>}
+      <div className="topo" style={{ alignItems: "flex-end" }}>
+        <p className="suave" style={{ margin: 0, maxWidth: 620 }}>Conjuntos e partes prontos e o que ainda está no meio do processo. <b>{num(totalPecas)}</b> peça(s) em processo no total.</p>
+        <div className="acoes">
+          <IrPara rotulo="Mostrar" valor={qs(ver)} opcoes={[{ href: qs("tudo"), nome: "Conjuntos e partes" }, { href: qs("conjuntos"), nome: "Só conjuntos" }, { href: qs("partes"), nome: "Só partes" }]} />
+          <IrPara rotulo="Produto" valor={qs(ver)} opcoes={[{ href: qs(ver, null), nome: "Todos os produtos" }, ...produtos.map((p) => ({ href: qs(ver, p.id), nome: `${p.codigo ?? ""} — ${p.nome}` }))]} />
+        </div>
+      </div>
+      {pode(u.permissoes, "producao", "criar") && conjMontar.length > 0 && (
+        <div className="card">
+          <b>Montar conjunto</b>
+          <p className="suave" style={{ margin: "4px 0 0" }}>Escolha o conjunto e confira as partes. As partes marcadas saem do estoque e o conjunto entra pronto.</p>
+          <MontarConjunto conjuntos={conjMontar} pecas={pecasMontar} acao={montar} />
+        </div>
+      )}
+      {ver !== "partes" && <Tabela titulo="Conjuntos" ls={linhas.filter((l) => l.i.tipo === "conjunto")} />}
+      {ver !== "conjuntos" && <Tabela titulo="Partes" ls={linhas.filter((l) => l.i.tipo === "peca")} />}
       <p className="suave">Detalhes de cada lote (quem fez cada processo e o tempo) em <Link href="/producao">Produção</Link>.</p>
     </>
   );
