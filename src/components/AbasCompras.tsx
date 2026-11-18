@@ -4,7 +4,6 @@ const ABAS: [Aba, string, string][] = [
   ["receber", "Receber material", "/compras/receber"],
   ["historico", "Histórico de compras", "/compras/historico"],
   ["precos", "Preços", "/compras/precos"],
-  ["boletos", "Calendário de boletos", "/compras/boletos"],
   ["fornecedores", "Fornecedores", "/compras/fornecedores"],
 ];
 export default function AbasCompras({ ativo }: { ativo: Aba }) {
