@@ -1,4 +1,5 @@
 import Link from "next/link";
+import FotoInput from "@/components/FotoInput";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
@@ -30,6 +31,7 @@ async function salvar(form: FormData) {
       estoqueMinimo: n(form.get("estoqueMinimo")), ...(form.has("diasFabricacao") ? { diasFabricacao: Math.max(0, Math.round(n(form.get("diasFabricacao")))) } : {}),
       precoCompra: form.get("precoCompra") ? n(form.get("precoCompra")) : null, precoVenda: form.get("precoVenda") ? n(form.get("precoVenda")) : null,
       loteMinimo: form.get("loteMinimo") ? n(form.get("loteMinimo")) : null, fornecedorId, setor: origem === "comprado" ? null : String(form.get("setor") || "") || antes.setor, observacao: String(form.get("obs") || "") || null,
+      ...(form.has("foto") ? { foto: String(form.get("foto") || "") || null } : {}),
     },
   });
   // preço de compra alterado à mão entra no histórico de preços
@@ -91,7 +93,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
     <>
       <div className="topo">
         <div>
-          <h1 style={{ margin: 0 }}>{it.nome}</h1>
+          <h1 style={{ margin: 0, display: "flex", alignItems: "center", gap: 12 }}>{it.foto && <span className="mini"><img src={it.foto} alt="" /></span>}{it.nome}</h1>
           <span className="suave">{it.codigo} · {TIPOS[it.tipo]} · {it.origem === "fabricado" ? `fabricado aqui${it.setor ? ` (${it.setor})` : ""}` : "comprado"}</span>
         </div>
         <Link className="btn sec" href={`/estoque?tipo=${it.tipo}`}>Voltar</Link>
@@ -156,6 +158,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
           <div className="card">
             <form action={salvar} className="campos">
               <input type="hidden" name="id" value={id} />
+              <div className="inteiro"><FotoInput atual={it.foto} /></div>
               <label>Nome<input name="nome" defaultValue={it.nome} required /></label>
               <label>Origem<select name="origem" defaultValue={it.origem}><option value="comprado">Comprado</option><option value="fabricado">Fabricado aqui</option></select></label>
               <label>Unidade<select name="unidade" defaultValue={it.unidade}><option>un</option><option>kg</option><option>m</option><option>L</option></select></label>

@@ -9,6 +9,7 @@ import { fornecedorPorNome } from "@/lib/fornecedores";
 import { dia } from "@/lib/datas";
 import { brl, num, qtd } from "@/lib/formato";
 import Excluir from "@/components/Excluir";
+import FotoInput from "@/components/FotoInput";
 
 const nn = (v: FormDataEntryValue | null) => { const x = Number(String(v ?? "").replace(",", ".")); return Number.isFinite(x) ? x : 0; };
 const txt = (v: FormDataEntryValue | null) => String(v ?? "").trim() || null;
@@ -29,7 +30,7 @@ async function nova(form: FormData) {
       data: {
         nome: nome!, codigo: txt(form.get("codigo")), tipo: "materia_prima", origem: "comprado", unidade: String(form.get("unidade") || "kg"),
         material: txt(form.get("material")), dimensoes: txt(form.get("dimensoes")), pesoUnitKg: form.get("pesoUnitKg") ? nn(form.get("pesoUnitKg")) : null,
-        precoCompra: preco, estoque, estoqueMinimo: nn(form.get("estoqueMinimo")), fornecedorId,
+        precoCompra: preco, estoque, estoqueMinimo: nn(form.get("estoqueMinimo")), fornecedorId, foto: txt(form.get("foto")),
       },
     });
     if (estoque) await db.movimentoEstoque.create({ data: { itemId: it.id, quantidade: estoque, motivo: "Estoque inicial", usuario: u.nome } });
@@ -51,7 +52,8 @@ async function editar(form: FormData) {
   await db.item.update({
     where: { id },
     data: { nome: String(form.get("nome")).trim(), material: txt(form.get("material")), dimensoes: txt(form.get("dimensoes")), unidade: String(form.get("unidade")),
-      pesoUnitKg: form.get("pesoUnitKg") ? nn(form.get("pesoUnitKg")) : null, precoCompra: preco, estoqueMinimo: nn(form.get("estoqueMinimo")) },
+      pesoUnitKg: form.get("pesoUnitKg") ? nn(form.get("pesoUnitKg")) : null, precoCompra: preco, estoqueMinimo: nn(form.get("estoqueMinimo")),
+      ...(form.has("foto") ? { foto: txt(form.get("foto")) } : {}) },
   });
   if (preco && preco !== antes.precoCompra) await db.$transaction((tx) => registrarPreco(tx, { itemId: id, preco, data: dia(), origem: "manual", fornecedorId: antes.fornecedorId, usuario: u.nome }));
   revalidatePath("/materia-prima");
@@ -119,11 +121,11 @@ export default async function MateriaPrima({ searchParams }: { searchParams: Pro
             const baixo = i.estoqueMinimo > 0 && i.estoque < i.estoqueMinimo;
             return (
               <tr key={i.id} className={baixo ? "falta" : ""}>
-                <td><Link href={`/estoque/${i.id}`}><b>{i.nome}</b></Link><br /><span className="suave">{i.codigo} · usada em {i._count.usadoEm} peça(s)</span></td>
+                <td style={{ minWidth: 260 }}><Link href={`/estoque/${i.id}`} className="com-foto" style={{ color: "inherit", textDecoration: "none" }}><span className="mini">{i.foto ? <img src={i.foto} alt="" /> : "sem foto"}</span><span className="t"><b>{i.nome}</b><small>{i.codigo} · usada em {i._count.usadoEm} peça(s)</small></span></Link></td>
                 <td>{i.material ?? <span className="suave">—</span>}</td>
                 <td>{i.dimensoes ?? <span className="suave">—</span>}</td>
                 <td className="n"><b>{qtd(i.estoque, i.unidade)}</b>{i.unidade !== "kg" && i.pesoUnitKg ? <div className="suave">{num(i.pesoUnitKg, 3)} kg cada</div> : null}</td>
-                <td className="n">{pk != null ? `${num(pk, 1)} kg` : <span className="selo alerta">falta peso</span>}</td>
+                <td className="n" style={{ whiteSpace: "nowrap" }}>{pk != null ? `${num(pk, 1)} kg` : <span className="selo alerta">falta peso</span>}</td>
                 <td className="n">{brl(i.precoCompra)}<span className="suave">/{i.unidade}</span></td>
                 <td className="n">{brl(valor(i))}</td>
                 <td className="n">{i.estoqueMinimo ? qtd(i.estoqueMinimo, i.unidade) : "—"}{baixo && <div><span className="selo erro">abaixo</span></div>}</td>
@@ -141,6 +143,7 @@ export default async function MateriaPrima({ searchParams }: { searchParams: Pro
                         </form>
                         <form action={editar} className="campos" style={{ marginTop: 10, gridTemplateColumns: "1fr 1fr" }}>
                           <input type="hidden" name="id" value={i.id} />
+                          <div className="inteiro"><FotoInput atual={i.foto} /></div>
                           <label className="inteiro">Nome<input name="nome" defaultValue={i.nome} /></label>
                           <label>Material<input name="material" defaultValue={i.material ?? ""} list="materiais" /></label>
                           <label>Medidas<input name="dimensoes" defaultValue={i.dimensoes ?? ""} /></label>
@@ -165,6 +168,7 @@ export default async function MateriaPrima({ searchParams }: { searchParams: Pro
         <div className="card">
           <b>Adicionar matéria-prima</b>
           <form action={nova} className="campos" style={{ marginTop: 12 }}>
+            <div className="inteiro"><FotoInput /></div>
             <label>Nome<input name="nome" required placeholder="ex.: Chapa aço 1,2 mm 1000×2000" /></label>
             <label>Código<input name="codigo" placeholder="MP-…" /></label>
             <label>Material<input name="material" list="materiais" placeholder="Aço, Zamac, Latão…" /></label>
