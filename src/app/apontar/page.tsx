@@ -137,9 +137,11 @@ export default async function Apontar({
                 <div style={{ margin: "8px 0" }}><Cronometro inicio={pr.inicio.toISOString()} segPausado={pr.segPausado} pausadoEm={pr.pausadoEm?.toISOString() ?? null} /></div>
                 <form action={finalizar}>
                   <input type="hidden" name="id" value={pr.id} />
-                  <label>Peças boas<input name="quantidade" type="number" inputMode="numeric" min={0} /></label>
-                  <label>Refugo<input name="refugo" type="number" inputMode="numeric" min={0} defaultValue={0} /></label>
-                  <label>PIN de {pr.funcionario.nome.split(" ")[0]}<input name="pin" type="password" inputMode="numeric" pattern="\d{4,6}" required autoComplete="off" /></label>
+                  <div className="apontar-campos tres" style={{ marginTop: 0 }}>
+                    <label>Peças boas<input name="quantidade" type="number" inputMode="numeric" min={0} /></label>
+                    <label>Refugo<input name="refugo" type="number" inputMode="numeric" min={0} defaultValue={0} /></label>
+                    <label>PIN de {pr.funcionario.nome.split(" ")[0]}<input name="pin" type="password" inputMode="numeric" pattern="\d{4,6}" required autoComplete="off" /></label>
+                  </div>
                   <div className="acoes">
                     <button className="btn" name="acao" value="finalizar">■ Finalizar</button>
                     <button className="btn sec" name="acao" value="pausar" formNoValidate={false}>{pr.pausadoEm ? "▶ Retomar" : "Ⅱ Pausar"}</button>

@@ -4,7 +4,6 @@ import type { DadosNovoProcesso } from "@/lib/fluxo";
 
 type It = DadosNovoProcesso["itens"][number];
 const n = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
-const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 function Mini({ foto }: { foto: string | null }) {
   return <span className="mini">{foto ? <img src={foto} alt="" /> : "sem foto"}</span>;
@@ -17,8 +16,7 @@ export default function NovoProcesso({ dados, acao, comPin = false, inicial }: {
 }) {
   const mapa = useMemo(() => new Map(dados.itens.map((i) => [i.id, i])), [dados.itens]);
   const ini = inicial?.itemId ? mapa.get(inicial.itemId) : undefined;
-  const [busca, setBusca] = useState("");
-  const [produtoId, setProdutoId] = useState<number | null>(ini ? ini.id : null);
+  const [produtoId, setProdutoId] = useState<number | null>(ini && ini.tipo === "produto" ? ini.id : null);
   const [itemId, setItemId] = useState<number | null>(ini ? ini.id : null);
   const [passoId, setPassoId] = useState<number | null>(inicial?.passoId ?? null);
   const [loteId, setLoteId] = useState<string>(inicial?.loteId ? String(inicial.loteId) : "");
@@ -26,9 +24,7 @@ export default function NovoProcesso({ dados, acao, comPin = false, inicial }: {
   const [modo, setModo] = useState<"cronometro" | "lancar">("cronometro");
 
   const produtos = dados.itens.filter((i) => i.tipo === "produto");
-  const achados = busca.trim()
-    ? dados.itens.filter((i) => norm(`${i.codigo ?? ""} ${i.nome}`).includes(norm(busca.trim()))).slice(0, 40)
-    : produtos;
+  const pecasSoltas = dados.itens.filter((i) => i.tipo !== "produto" && i.passos.length > 0);
 
   // partes do produto: ele mesmo (montagem final) e tudo o que vai dentro dele que tem processo ou é fabricado
   const partes = useMemo(() => {
@@ -56,6 +52,7 @@ export default function NovoProcesso({ dados, acao, comPin = false, inicial }: {
   const lotesPasso = idx < 0 ? [] : idx === 0 ? lotesItem : lotesItem.filter((l) => (l.passos.find((x) => x.id === item!.passos[idx - 1].id)?.aguardando ?? 0) > 0);
   const escolherItem = (i: It) => { setItemId(i.id); setPassoId(i.passos.length === 1 ? i.passos[0].id : null); setLoteId(""); };
   const pronto = item && passo && func;
+  const escolhido = produtoId ? mapa.get(produtoId) : item;
 
   return (
     <form action={acao} className="etapas-wizard">
@@ -63,90 +60,99 @@ export default function NovoProcesso({ dados, acao, comPin = false, inicial }: {
       <input type="hidden" name="passoId" value={passoId ?? ""} />
       <input type="hidden" name="loteId" value={loteId} />
 
-      <h3><span className="passo-n">1</span> Produto (SKU)</h3>
-      <input placeholder="Buscar por SKU, produto ou peça…" value={busca} onChange={(e) => setBusca(e.target.value)} style={{ width: "100%", marginBottom: 10 }} />
-      <div className="escolha">
-        {achados.map((i) => (
-          <button type="button" key={i.id} className={(produtoId === i.id || (!produtoId && itemId === i.id)) ? "sel" : ""}
-            onClick={() => { if (i.tipo === "produto") { setProdutoId(i.id); setItemId(null); setPassoId(null); } else { setProdutoId(null); escolherItem(i); } setBusca(""); }}>
-            <Mini foto={i.foto} />
-            <b style={{ fontSize: ".9rem" }}>{i.codigo}</b>
-            <small>{i.nome}</small>
-          </button>
-        ))}
-        {achados.length === 0 && <p className="suave">Nada encontrado.</p>}
+      <div className="apontar-campos">
+        <label>1. Produto ou peça (SKU)
+          <span className="com-mini">
+            {escolhido && <Mini foto={escolhido.foto} />}
+            <select value={produtoId ? `p${produtoId}` : itemId ? `i${itemId}` : ""} required
+              onChange={(e) => {
+                const v = e.target.value; const id = Number(v.slice(1)); const i = mapa.get(id);
+                if (!i) return;
+                if (v[0] === "p") { setProdutoId(id); setItemId(null); setPassoId(null); setLoteId(""); } else { setProdutoId(null); escolherItem(i); }
+              }}>
+              <option value="" disabled>Escolha o produto</option>
+              <optgroup label="Produtos">
+                {produtos.map((i) => <option key={i.id} value={`p${i.id}`}>{i.codigo ? `${i.codigo} · ` : ""}{i.nome}</option>)}
+              </optgroup>
+              {pecasSoltas.length > 0 && (
+                <optgroup label="Peças">
+                  {pecasSoltas.map((i) => <option key={i.id} value={`i${i.id}`}>{i.codigo ? `${i.codigo} · ` : ""}{i.nome}</option>)}
+                </optgroup>
+              )}
+            </select>
+          </span>
+        </label>
+
+        {produtoId && (
+          <label>2. Parte do produto
+            <select value={itemId ?? ""} required onChange={(e) => { const i = mapa.get(Number(e.target.value)); if (i) escolherItem(i); }}>
+              <option value="" disabled>Escolha a parte</option>
+              {partes.map((i) => (
+                <option key={i.id} value={i.id} disabled={!i.passos.length}>
+                  {i.id === produtoId ? "Montagem final" : i.nome}{i.codigo ? ` · ${i.codigo}` : ""}{!i.passos.length ? " (sem processo)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {item && (
+          <label>3. Processo
+            <select value={passoId ?? ""} required onChange={(e) => { setPassoId(Number(e.target.value)); setLoteId(""); }}>
+              <option value="" disabled>Escolha o processo</option>
+              {item.passos.map((p, k) => (
+                <option key={p.id} value={p.id}>{k + 1}. {p.nome} ({p.etapa}){k > 0 ? ` · ${n(esperando(p.id))} esperando` : ""}</option>
+              ))}
+            </select>
+            {passo && <small className="suave">{idx === 0 ? "Começa aqui (consome a matéria-prima)." : `Peças prontas de ${item.passos[idx - 1].nome} esperando: ${n(esperando(passo.id))}.`}</small>}
+          </label>
+        )}
+
+        {passo && (
+          <label>4. Lote
+            <select value={loteId} onChange={(e) => setLoteId(e.target.value)}>
+              <option value="">{idx === 0 ? "Novo lote" : "Sem lote (peças de antes do sistema)"}</option>
+              {lotesPasso.map((l) => {
+                const ant = idx > 0 ? l.passos.find((x) => x.id === item!.passos[idx - 1].id) : undefined;
+                const aqui = l.passos.find((x) => x.id === passo.id);
+                return (
+                  <option key={l.id} value={l.id}>
+                    {l.numero} · {idx > 0 ? `${n(ant?.aguardando ?? 0)} esperando` : `${n(aqui?.feito ?? 0)} feitas${l.planejado ? ` de ${n(l.planejado)}` : ""}`}{aqui?.emAndamento ? ` · ${aqui.emAndamento} em andamento` : ""}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+        )}
+        {passo && idx === 0 && loteId === "" && <label>Quantidade planejada no lote (opcional)<input name="planejado" type="number" inputMode="numeric" min={1} /></label>}
       </div>
-
-      {produtoId && (
-        <>
-          <h3><span className="passo-n">2</span> Parte do produto</h3>
-          <div className="escolha lista">
-            {partes.map((i) => (
-              <button type="button" key={i.id} className={itemId === i.id ? "sel" : ""} disabled={!i.passos.length} style={!i.passos.length ? { opacity: 0.5 } : undefined} onClick={() => escolherItem(i)}>
-                <Mini foto={i.foto} />
-                <span><b>{i.id === produtoId ? "Montagem final" : i.nome}</b> <small>· {i.codigo}</small><br />
-                  <small>{i.passos.length ? i.passos.map((p) => `${p.nome} (${p.etapa})`).join(" → ") : "sem processo cadastrado (cadastre em Produção → Processos das peças)"}</small></span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-
-      {item && (
-        <>
-          <h3><span className="passo-n">3</span> Processo de {item.nome}</h3>
-          <div className="escolha lista">
-            {item.passos.map((p, k) => (
-              <button type="button" key={p.id} className={passoId === p.id ? "sel" : ""} onClick={() => { setPassoId(p.id); setLoteId(""); }}>
-                <span className="passo-n">{k + 1}</span>
-                <span><b>{p.nome}</b> <small>· {p.etapa}</small><br />
-                  <small>{k === 0 ? "Começa aqui (consome a matéria-prima)" : `${n(esperando(p.id))} peça(s) esperando, prontas de ${item.passos[k - 1].nome}`}</small></span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
 
       {passo && (
         <>
-          <h3><span className="passo-n">4</span> Lote</h3>
-          <div className="escolha lista">
-            <button type="button" className={loteId === "" ? "sel" : ""} onClick={() => setLoteId("")}>
-              <span><b>{idx === 0 ? "Novo lote" : "Sem lote"}</b><br /><small>{idx === 0 ? "Abre um lote novo com as peças que você vai fazer agora" : "Peças que já estavam prontas antes (fora do sistema)"}</small></span>
-            </button>
-            {lotesPasso.map((l) => {
-              const ant = idx > 0 ? l.passos.find((x) => x.id === item!.passos[idx - 1].id) : undefined;
-              const aqui = l.passos.find((x) => x.id === passo.id);
-              return (
-                <button type="button" key={l.id} className={loteId === String(l.id) ? "sel" : ""} onClick={() => setLoteId(String(l.id))}>
-                  <span><b>{l.numero}</b><br /><small>{idx > 0 ? `${n(ant?.aguardando ?? 0)} esperando` : `${n(aqui?.feito ?? 0)} feitas${l.planejado ? ` de ${n(l.planejado)} planejadas` : ""}`}{aqui?.emAndamento ? ` · ${aqui.emAndamento} em andamento` : ""}</small></span>
-                </button>
-              );
-            })}
-          </div>
-          {idx === 0 && loteId === "" && <label style={{ marginTop: 10, maxWidth: 260 }}>Quantidade planejada no lote (opcional)<input name="planejado" type="number" inputMode="numeric" min={1} /></label>}
-
-          <h3><span className="passo-n">5</span> Colaborador</h3>
-          <select name="funcionarioId" value={func} onChange={(e) => setFunc(e.target.value)} required style={{ width: "100%", maxWidth: 420 }}>
-            <option value="" disabled>Escolha quem vai fazer</option>
-            {dados.funcs.filter((f) => !comPin || f.temPin).map((f) => <option key={f.id} value={f.id}>{f.nome}{f.setor ? ` · ${f.setor}` : ""}</option>)}
-          </select>
-
-          <h3><span className="passo-n">6</span> Tempo</h3>
-          <div className="abas">
-            <a href="#" className={modo === "cronometro" ? "ativo" : ""} onClick={(e) => { e.preventDefault(); setModo("cronometro"); }}>Cronometrar</a>
-            <a href="#" className={modo === "lancar" ? "ativo" : ""} onClick={(e) => { e.preventDefault(); setModo("lancar"); }}>Já terminei: lançar tempo e quantidade</a>
+          <div className="apontar-campos">
+            <label>5. Colaborador
+              <select name="funcionarioId" value={func} onChange={(e) => setFunc(e.target.value)} required>
+                <option value="" disabled>Escolha quem vai fazer</option>
+                {dados.funcs.filter((f) => !comPin || f.temPin).map((f) => <option key={f.id} value={f.id}>{f.nome}{f.setor ? ` · ${f.setor}` : ""}</option>)}
+              </select>
+            </label>
+            <label>6. Tempo
+              <select value={modo} onChange={(e) => setModo(e.target.value as "cronometro" | "lancar")}>
+                <option value="cronometro">Cronometrar agora</option>
+                <option value="lancar">Já terminei: lançar tempo e quantidade</option>
+              </select>
+            </label>
           </div>
           {modo === "lancar" ? (
-            <div className="campos" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+            <div className="apontar-campos tres">
               <label>Peças boas<input name="quantidade" type="number" inputMode="numeric" min={0} required /></label>
               <label>Refugo<input name="refugo" type="number" inputMode="numeric" min={0} defaultValue={0} /></label>
               <label>Tempo (minutos)<input name="minutos" type="number" inputMode="decimal" min={0.1} step="any" required /></label>
             </div>
           ) : (
-            <p className="suave" style={{ margin: "0 0 8px" }}>O relógio começa agora. No fim, toque em <b>Finalizar</b> e informe quantas peças saíram.</p>
+            <p className="suave" style={{ margin: "10px 0 0", fontSize: ".9rem" }}>O relógio começa agora. No fim, toque em <b>Finalizar</b> e informe quantas peças saíram.</p>
           )}
-          {comPin && <label style={{ marginTop: 12, maxWidth: 260 }}>PIN do colaborador<input name="pin" type="password" inputMode="numeric" pattern="\d{4,6}" required autoComplete="off" /></label>}
+          {comPin && <label style={{ marginTop: 12, maxWidth: 220 }}>PIN do colaborador<input name="pin" type="password" inputMode="numeric" pattern="\d{4,6}" required autoComplete="off" /></label>}
           <div className="acoes" style={{ marginTop: 16 }}>
             <button className="btn" name="modo" value={modo} disabled={!pronto}>{modo === "cronometro" ? "▶ Iniciar cronômetro" : "Lançar produção"}</button>
           </div>
