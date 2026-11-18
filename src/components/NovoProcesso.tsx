@@ -8,8 +8,8 @@ const n = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 0 })
 
 /** Iniciar novo processo: escolhe o produto (com foto), a parte, o processo, o lote e o colaborador.
  *  Depois liga o cronômetro ou lança tempo + quantidade direto. */
-export default function NovoProcesso({ dados, acao, comPin = false, inicial }: {
-  dados: DadosNovoProcesso; acao: (f: FormData) => void | Promise<void>; comPin?: boolean; inicial?: { itemId?: number; passoId?: number; loteId?: number; funcionarioId?: number };
+export default function NovoProcesso({ dados, acao, inicial }: {
+  dados: DadosNovoProcesso; acao: (f: FormData) => void | Promise<void>; inicial?: { itemId?: number; passoId?: number; loteId?: number; funcionarioId?: number };
 }) {
   const mapa = useMemo(() => new Map(dados.itens.map((i) => [i.id, i])), [dados.itens]);
   const ini = inicial?.itemId ? mapa.get(inicial.itemId) : undefined;
@@ -114,7 +114,7 @@ export default function NovoProcesso({ dados, acao, comPin = false, inicial }: {
             <label>5. Colaborador
               <select name="funcionarioId" value={func} onChange={(e) => setFunc(e.target.value)} required>
                 <option value="" disabled>Escolha quem vai fazer</option>
-                {dados.funcs.filter((f) => !comPin || f.temPin).map((f) => <option key={f.id} value={f.id}>{f.nome}{f.setor ? ` · ${f.setor}` : ""}</option>)}
+                {dados.funcs.map((f) => <option key={f.id} value={f.id}>{f.nome}{f.setor ? ` · ${f.setor}` : ""}</option>)}
               </select>
             </label>
             <label>6. Tempo
@@ -133,7 +133,6 @@ export default function NovoProcesso({ dados, acao, comPin = false, inicial }: {
           ) : (
             <p className="suave" style={{ margin: "10px 0 0", fontSize: ".9rem" }}>O relógio começa agora. No fim, toque em <b>Finalizar</b> e informe quantas peças saíram.</p>
           )}
-          {comPin && <label style={{ marginTop: 12, maxWidth: 220 }}>PIN do colaborador<input name="pin" type="password" inputMode="numeric" pattern="\d{4,6}" required autoComplete="off" /></label>}
           <div className="acoes" style={{ marginTop: 16 }}>
             <button className="btn" name="modo" value={modo} disabled={!pronto}>{modo === "cronometro" ? "▶ Iniciar cronômetro" : "Lançar produção"}</button>
           </div>

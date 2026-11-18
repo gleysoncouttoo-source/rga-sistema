@@ -29,11 +29,10 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
   const veFin = pode(u.permissoes, "financeiro");
   if (veFin) await gerarContasMensais();
   const hojeD = dia();
-  const [funcs, apsHoje, pendentes, semPin, comprasSug, comprasUrg, vendasAbertas, boletosVencidos, contasHoje] = await Promise.all([
+  const [funcs, apsHoje, pendentes, comprasSug, comprasUrg, vendasAbertas, boletosVencidos, contasHoje] = await Promise.all([
     db.funcionario.count({ where: { ativo: true } }),
     db.apontamento.findMany({ where: { data: { gte: hoje } } }),
     db.recorde.count({ where: { status: "pendente" } }),
-    db.funcionario.count({ where: { ativo: true, pinHash: null, cargo: "Funcionário" } }),
     db.pedidoCompra.count({ where: { status: "sugerido" } }),
     db.pedidoCompra.count({ where: { status: "sugerido", urgente: true } }),
     db.pedidoVenda.count({ where: { status: "aberto" } }),
@@ -71,13 +70,10 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
       {pendentes > 0 && pode(u.permissoes, "producao", "aprovar") && (
         <div className="aviso alerta">Há {pendentes} recorde(s) novo(s) esperando confirmação. <Link href="/producao">Ver em Produção</Link></div>
       )}
-      {semPin > 0 && pode(u.permissoes, "funcionarios", "editar") && (
-        <div className="aviso alerta">{semPin} funcionário(s) ainda sem PIN para registrar produção. <Link href="/funcionarios">Cadastrar PIN</Link></div>
-      )}
       <div className="card">
         <b>Para os operadores</b>
         <p className="suave" style={{ marginBottom: 0 }}>
-          No celular, abra o endereço do sistema seguido de <code>/apontar</code>. O operador escolhe o produto pela foto, a peça, o processo e o lote, liga o cronômetro (ou lança tempo e quantidade) e confirma com o PIN.
+          No celular, abra o endereço do sistema seguido de <code>/apontar</code>. O operador escolhe o produto pela foto, a peça, o processo e o lote, liga o cronômetro (ou lança tempo e quantidade) e escolhe o próprio nome.
         </p>
       </div>
     </>
