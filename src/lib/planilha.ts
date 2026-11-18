@@ -75,5 +75,12 @@ function lerCsv(txt: string): string[][] {
 export function lerPlanilha(nome: string, buf: Uint8Array): string[][] {
   if (buf[0] === 0x50 && buf[1] === 0x4b) return lerXlsx(buf); // zip = xlsx
   if (/\.xls$/i.test(nome)) throw new Error("Arquivo .xls antigo: abra no Excel e salve como .xlsx ou .csv.");
-  return lerCsv(new TextDecoder("utf-8").decode(buf).replace(/^﻿/, ""));
+  return lerCsv(decodificar(buf));
+}
+
+/** Texto de arquivo: UTF-8 ou, se não for, o padrão do Windows (bancos costumam mandar assim). */
+export function decodificar(buf: Uint8Array) {
+  let t: string;
+  try { t = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch { t = new TextDecoder("windows-1252").decode(buf); }
+  return t.replace(/^\uFEFF/, "");
 }

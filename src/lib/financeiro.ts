@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { chave, dia, diaUtil, proximoDiaUtil, somaDias } from "./datas";
 
-export const CATEGORIAS = ["Fornecedor", "Colaboradores", "Condomínio", "Aluguel", "Energia", "Água", "Internet/telefone", "Impostos", "Contador", "Frete", "Manutenção", "Outras"];
+export const CATEGORIAS = ["Fornecedor", "Colaboradores", "Condomínio", "Aluguel", "Energia", "Água", "Internet/telefone", "Impostos", "Contador", "Frete", "Manutenção", "Tarifas bancárias", "Outras"];
 export const BANCOS = ["Santander", "Bradesco"];
 
 /** N-ésimo dia útil do mês (1 = primeiro dia útil). */
