@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { carregarFechaduras } from "./fechaduras.mjs";
 import { carregarRoteiros } from "./roteiros.mjs";
+import { carregarFotos } from "./fotos.mjs";
 
 const prisma = new PrismaClient();
 
@@ -114,6 +115,7 @@ async function main() {
   for (const nome of ["Bradesco", "Santander"]) await prisma.contaBancaria.upsert({ where: { nome }, update: {}, create: { nome } });
   await carregarFechaduras(prisma);
   await carregarRoteiros(prisma);
+  await carregarFotos(prisma);
   console.log("Carga inicial concluída.");
 }
 
