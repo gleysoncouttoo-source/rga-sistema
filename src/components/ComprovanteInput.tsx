@@ -2,7 +2,7 @@
 import { useState } from "react";
 
 /** Escolhe a foto ou o PDF do comprovante. Foto é reduzida (até 1800 px) para caber; PDF vai como está (até 4 MB). */
-export default function ComprovanteInput() {
+export default function ComprovanteInput({ opcional = false }: { opcional?: boolean }) {
   const [arq, setArq] = useState(""), [nome, setNome] = useState(""), [erro, setErro] = useState("");
   async function escolher(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -33,7 +33,7 @@ export default function ComprovanteInput() {
   }
   return (
     <>
-      <input type="file" accept="image/*,application/pdf" onChange={escolher} required={!arq} />
+      <input type="file" accept="image/*,application/pdf" onChange={escolher} required={!opcional && !arq} />
       {erro && <span style={{ color: "var(--erro)", fontSize: ".82rem" }}>{erro}</span>}
       <input type="hidden" name="arq" value={arq} />
       <input type="hidden" name="arqNome" value={nome} />

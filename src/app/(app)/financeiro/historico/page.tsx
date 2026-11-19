@@ -17,6 +17,9 @@ import "./historico.css";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 const volta = (f: FormData) => { const v = String(f.get("voltar") || ""); return v.startsWith("/financeiro/historico") ? v : "/financeiro/historico"; };
+const FORMAS = ["pix", "boleto", "transferência", "débito automático", "dinheiro", "cartão"];
+const txt = (f: FormData, k: string) => String(f.get(k) || "").trim() || null;
+const valorBR = (v: FormDataEntryValue | null) => Number(String(v ?? "").trim().replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", "."));
 const aviso = (url: string, k: "ok" | "erro", m: string) => `${url}${url.includes("?") ? "&" : "?"}${k}=${encodeURIComponent(m)}`;
 
 async function origem() {
@@ -44,6 +47,33 @@ async function anexar(form: FormData) {
   await auditar(u.nome, "anexou comprovante", `#${id}`);
   revalidatePath("/financeiro/historico");
   redirect(aviso(url, "ok", "Comprovante anexado.") + `#p${id}`);
+}
+
+/** Lança direto no histórico um pagamento já feito (imposto, tarifa, conta paga na hora), com o comprovante junto. */
+async function lancar(form: FormData) {
+  "use server";
+  const u = await exigir("financeiro", "criar");
+  const url = volta(form);
+  const descricao = String(form.get("descricao") || "").trim(), valor = valorBR(form.get("valor")), quando = String(form.get("pagoEm") || "");
+  if (!descricao || !(valor > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(quando)) redirect(aviso(url + (url.includes("?") ? "&" : "?") + "novo=1", "erro", "Preencha descrição, valor e a data em que foi pago."));
+  const [tipo, idQuem] = String(form.get("quem") || "").split(":");
+  const fornecedorId = tipo === "f" ? Number(idQuem) || null : null, funcionarioId = tipo === "c" ? Number(idQuem) || null : null;
+  const forn = fornecedorId ? await db.fornecedor.findUnique({ where: { id: fornecedorId } }) : null;
+  const cat = String(form.get("categoria") || "");
+  const categoria = CATEGORIAS.includes(cat) ? cat : funcionarioId ? "Colaboradores" : fornecedorId ? "Fornecedor" : "Outras";
+  const d = dia(quando);
+  const c = await db.contaPagar.create({ data: {
+    descricao, categoria, valor, vencimento: d, pagoEm: d, status: "pago", banco: txt(form, "banco"), formaPagamento: txt(form, "forma"),
+    fornecedorId, funcionarioId, favorecido: forn?.nome ?? null, documento: forn?.cnpj ?? null, notaFiscal: txt(form, "nota"), observacao: txt(form, "obs"),
+  } });
+  const m = String(form.get("arq") || "").match(/^data:([\w/.+-]+);base64,(.+)$/);
+  if (m) {
+    const dados = Buffer.from(m[2], "base64");
+    if (dados.length <= 4.5 * 1024 * 1024) await db.comprovante.create({ data: { contaPagarId: c.id, nome: String(form.get("arqNome") || "comprovante").slice(0, 120), tipo: m[1], tamanho: dados.length, dados, token: randomBytes(18).toString("base64url"), usuario: u.nome } });
+  }
+  await auditar(u.nome, "lançou pagamento feito", `${descricao} ${valor}`);
+  revalidatePath("/financeiro/historico"); revalidatePath("/financeiro");
+  redirect(aviso(`/financeiro/historico?id=${c.id}`, "ok", m ? "Pagamento lançado com o comprovante guardado." : "Pagamento lançado. Anexe o comprovante quando tiver.") + `#p${c.id}`);
 }
 
 async function acao(form: FormData) {
@@ -115,9 +145,9 @@ export default async function HistoricoPagamentos({ searchParams }: { searchPara
   const total = pagos.reduce((t, c) => t + c.valor, 0), semComp = pagos.filter((c) => !c.comprovantes.length).length;
   const meses = new Map<string, typeof pagos>();
   for (const c of pagos) { const k = chave(dia(c.pagoEm!)).slice(0, 7); meses.set(k, [...(meses.get(k) ?? []), c]); }
-  const edita = pode(u.permissoes, "financeiro", "editar");
+  const edita = pode(u.permissoes, "financeiro", "editar"), cria = pode(u.permissoes, "financeiro", "criar");
   const cfg = configEnvio(), automatico = cfg.email || cfg.whats, base = await origem();
-  const qsAtual = new URLSearchParams(Object.entries(sp).filter(([k, v]) => v && !["ok", "erro"].includes(k)) as [string, string][]).toString();
+  const qsAtual = new URLSearchParams(Object.entries(sp).filter(([k, v]) => v && !["ok", "erro", "novo"].includes(k)) as [string, string][]).toString();
   const url = `/financeiro/historico${qsAtual ? "?" + qsAtual : ""}`;
   const H = ({ n, v }: { n: string; v: string }) => <input type="hidden" name={n} value={v} />;
 
@@ -127,6 +157,32 @@ export default async function HistoricoPagamentos({ searchParams }: { searchPara
       <AbasFinanceiro ativo="historico" />
       {sp.ok && <div className="aviso ok">{sp.ok}</div>}
       {sp.erro && <div className="aviso erro">{sp.erro}</div>}
+
+      {cria && !sp.novo && <div className="topo-hist"><a className="btn" href={`${url}${url.includes("?") ? "&" : "?"}novo=1#lancar`}>+ Lançar pagamento</a></div>}
+      {cria && sp.novo && (
+        <div className="card" id="lancar" style={{ borderColor: "var(--acento)", borderWidth: 2 }}>
+          <b>Lançar pagamento já feito</b>
+          <p className="suave pq" style={{ margin: "4px 0 0" }}>Para imposto, tarifa ou qualquer conta que você já pagou. Se quem recebeu não tem e-mail ou telefone no cadastro, o comprovante só fica guardado aqui.</p>
+          <form action={lancar} className="campos" style={{ marginTop: 12 }}>
+            <H n="voltar" v={url.replace(/[?&]novo=1/, "")} />
+            <label>Descrição<input name="descricao" required placeholder="ex.: DAS do Simples, novembro" autoFocus /></label>
+            <label>Valor (R$)<input name="valor" inputMode="decimal" required placeholder="0,00" /></label>
+            <label>Pago em<input name="pagoEm" type="date" defaultValue={chave(hoje)} required /></label>
+            <label>Categoria<select name="categoria" defaultValue="Impostos">{CATEGORIAS.map((c) => <option key={c}>{c}</option>)}</select></label>
+            <label>Quem recebeu<select name="quem" defaultValue="">
+              <option value="">Ninguém para avisar (só guardar)</option>
+              <optgroup label="Fornecedores">{fornecedores.map((f) => <option key={"f" + f.id} value={`f:${f.id}`}>{f.nome}</option>)}</optgroup>
+              <optgroup label="Colaboradores">{colaboradores.map((f) => <option key={"c" + f.id} value={`c:${f.id}`}>{f.nome}</option>)}</optgroup>
+            </select></label>
+            <label>Saiu pelo banco<select name="banco" defaultValue=""><option value="">—</option>{BANCOS.map((b) => <option key={b}>{b}</option>)}</select></label>
+            <label>Forma<select name="forma" defaultValue="pix"><option value="">—</option>{FORMAS.map((f) => <option key={f}>{f}</option>)}</select></label>
+            <label>Nota / guia (opcional)<input name="nota" placeholder="nº da nota ou da guia" /></label>
+            <label className="inteiro">Comprovante (foto ou PDF)<span className="anexar"><ComprovanteInput opcional /></span></label>
+            <label className="inteiro">Observação<input name="obs" /></label>
+            <div className="inteiro acoes"><button className="btn">Salvar</button><a className="btn sec" href={url.replace(/[?&]novo=1/, "") || "/financeiro/historico"}>Cancelar</a></div>
+          </form>
+        </div>
+      )}
 
       <form className="card linha-form" method="get">
         <label style={{ flex: "2 1 260px" }}>Pesquisar<input name="q" defaultValue={q} placeholder="nome, fornecedor, colaborador, nota, valor..." /></label>
@@ -173,14 +229,14 @@ export default async function HistoricoPagamentos({ searchParams }: { searchPara
                     {comp ? (
                       <div className="acoes">
                         <a className="btn sec peq" href={`/api/comprovante/${comp.token}`} target="_blank" rel="noreferrer">Ver</a>
-                        {edita && <form action={acao}><H n="id" v={String(c.id)} /><H n="a" v="enviar" /><H n="voltar" v={url} /><button className="btn peq" disabled={!email && !whats}>Enviar comprovante</button></form>}
+                        {edita && (email || whats) && <form action={acao}><H n="id" v={String(c.id)} /><H n="a" v="enviar" /><H n="voltar" v={url} /><button className="btn peq">Enviar comprovante</button></form>}
                       </div>
                     ) : edita ? (
                       <form action={anexar} className="anexar"><H n="id" v={String(c.id)} /><H n="voltar" v={url} /><ComprovanteInput /><button className="btn sec peq">Anexar</button></form>
                     ) : <span className="suave pq">sem comprovante</span>}
                     {comp && (
                       <div className="suave pq" style={{ marginTop: 4 }}>
-                        {comp.enviadoEm ? <>✓ enviado {dataDia(dia(comp.enviadoEm))} para {comp.enviadoPara}</> : email || whats ? <>vai para {[email, whats].filter(Boolean).join(" e ")}</> : <>sem e-mail ou telefone no cadastro</>}
+                        {comp.enviadoEm ? <>✓ enviado {dataDia(dia(comp.enviadoEm))} para {comp.enviadoPara}</> : email || whats ? <>vai para {[email, whats].filter(Boolean).join(" e ")}</> : <>✓ guardado (sem contato para enviar)</>}
                         {!automatico && (email || nW) && <> · enviar à mão: {email && <a href={`mailto:${email}?subject=${encodeURIComponent(texto.split(" — ")[0])}&body=${encodeURIComponent(`${texto}\n\n${link}`)}`}>e-mail</a>}{email && nW && " / "}{nW && <a target="_blank" rel="noreferrer" href={`https://wa.me/${nW}?text=${encodeURIComponent(`${texto}\n${link}`)}`}>WhatsApp</a>}</>}
                         {edita && <> · <form action={acao} className="inline"><H n="id" v={String(c.id)} /><H n="a" v="tirar" /><H n="voltar" v={url} /><button className="link">trocar</button></form></>}
                       </div>
@@ -193,7 +249,7 @@ export default async function HistoricoPagamentos({ searchParams }: { searchPara
         </div>
       ))}
       <p className="suave pq">
-        O comprovante vai para o e-mail e o telefone do cadastro do <Link href="/compras/fornecedores">fornecedor</Link> ou do <Link href="/funcionarios">colaborador</Link>.
+        O comprovante vai para o e-mail e o telefone do cadastro do <Link href="/compras/fornecedores">fornecedor</Link> ou do <Link href="/funcionarios">colaborador</Link>. Pagamento sem contato (imposto, tarifa) só guarda o comprovante.
         {" "}{automatico ? `Envio automático ligado: ${[cfg.email && "e-mail", cfg.whats && "WhatsApp"].filter(Boolean).join(" e ")}.` : "O envio automático ainda não foi ligado; enquanto isso, use os links \"enviar à mão\"."}
       </p>
     </>
