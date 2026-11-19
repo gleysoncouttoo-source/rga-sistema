@@ -132,7 +132,7 @@ async function lancarBoletos(tx: Tx, compraId: number, fornecedorId: number | nu
 }
 
 // ───────── Análise do pedido de venda ─────────
-type ItemCarregado = Prisma.ItemGetPayload<{ include: { componentes: true; fornecedor: true } }>;
+type ItemCarregado = Prisma.ItemGetPayload<{ include: { componentes: true; fornecedor: true; ofertas: true } }>;
 
 export async function analisarPedido(pedidoId: number, usuario = "Sistema") {
   return db.$transaction(async (tx) => {
@@ -146,7 +146,7 @@ export async function analisarPedido(pedidoId: number, usuario = "Sistema") {
     await tx.necessidade.deleteMany({ where: { pedidoVendaId: pedidoId } });
     await tx.pedidoCompra.deleteMany({ where: { pedidoVendaId: pedidoId, status: "sugerido" } });
 
-    const lista: ItemCarregado[] = await tx.item.findMany({ include: { componentes: true, fornecedor: true } });
+    const lista: ItemCarregado[] = await tx.item.findMany({ include: { componentes: true, fornecedor: true, ofertas: true } });
     const itens = new Map(lista.map((i) => [i.id, i]));
     const outras = await tx.reserva.groupBy({ by: ["itemId"], _sum: { quantidade: true } });
     const disp = new Map(lista.map((i) => [i.id, i.estoque]));
@@ -211,17 +211,21 @@ export async function analisarPedido(pedidoId: number, usuario = "Sistema") {
     const criadas: number[] = [];
     for (const [fornecedorId, its] of grupos) {
       const forn = fornecedorId ? itens.get(its[0].itemId)!.fornecedor! : null;
-      const lead = forn?.prazoEntregaDias ?? 7;
+      // condições combinadas com o fornecedor para cada matéria-prima (aba Fornecedores); vazio = condição geral do fornecedor
+      const oferta = (itemId: number) => (fornecedorId ? itens.get(itemId)!.ofertas.find((o) => o.fornecedorId === fornecedorId) : undefined);
+      const lead = Math.max(...its.map((x) => oferta(x.itemId)?.prazoEntregaDias ?? forn?.prazoEntregaDias ?? 7));
       const precisa = its.reduce((m, x) => (x.precisaEm < m ? x.precisaEm : m), its[0].precisaEm);
       const limite = diaUtilAnterior(somaDias(precisa, -(lead + cfg.folgaCompraDias)));
-      const prazos = lerPrazos(forn?.prazoPagamento ?? "28");
+      const prazos = lerPrazos(its.map((x) => oferta(x.itemId)?.prazoPagamento).find(Boolean) ?? forn?.prazoPagamento ?? "28");
       const esc = escolherData(prazos, limite, contagem, cfg, hoje);
       if (!forn) esc.motivo = "Item sem fornecedor cadastrado: escolha o fornecedor para o sistema calcular o melhor dia. " + esc.motivo;
       urgente ||= esc.urgente;
       const itensCompra = its.map((x) => {
         const it = itens.get(x.itemId)!;
-        const q = it.loteMinimo && x.qtd < it.loteMinimo ? it.loteMinimo : x.qtd;
-        return { itemId: x.itemId, quantidade: arred(q), necessaria: x.qtd, precoUnitario: it.precoCompra };
+        const of = oferta(x.itemId);
+        const minimo = of?.compraMinima ?? it.loteMinimo;
+        const q = minimo && x.qtd < minimo ? minimo : x.qtd;
+        return { itemId: x.itemId, quantidade: arred(q), necessaria: x.qtd, precoUnitario: of?.preco ?? it.precoCompra };
       });
       const valor = itensCompra.reduce((s, x) => s + x.quantidade * (x.precoUnitario ?? 0), 0);
       const pc = await tx.pedidoCompra.create({
@@ -300,11 +304,14 @@ export async function reprogramarCompra(id: number, p: { fornecedorId?: number |
     if (pc.status !== "sugerido" && pc.status !== "aprovado") return;
     const novoF = p.fornecedorId !== undefined ? p.fornecedorId : pc.fornecedorId;
     const forn = novoF ? await tx.fornecedor.findUniqueOrThrow({ where: { id: novoF } }) : null;
+    const itensPc = await tx.pedidoCompraItem.findMany({ where: { pedidoCompraId: id } });
+    const ofertas = novoF ? await tx.fornecedorItem.findMany({ where: { fornecedorId: novoF, itemId: { in: itensPc.map((i) => i.itemId) } } }) : [];
+    const leadOferta = ofertas.length ? Math.max(...itensPc.map((i) => ofertas.find((o) => o.itemId === i.itemId)?.prazoEntregaDias ?? forn?.prazoEntregaDias ?? 7)) : null;
     const leadAntigo = pc.prazoEntregaDias ?? pc.fornecedor?.prazoEntregaDias ?? 7;
-    const prazoCompra = p.prazoEntregaDias !== undefined ? p.prazoEntregaDias : novoF === pc.fornecedorId ? pc.prazoEntregaDias : null;
+    const prazoCompra = p.prazoEntregaDias !== undefined ? p.prazoEntregaDias : novoF === pc.fornecedorId ? pc.prazoEntregaDias : leadOferta;
     const lead = prazoCompra ?? forn?.prazoEntregaDias ?? 7;
     const limite = diaUtilAnterior(somaDias(dia(pc.dataLimite.toISOString()), leadAntigo - lead));
-    const prazos = lerPrazos(forn?.prazoPagamento ?? "28");
+    const prazos = lerPrazos(ofertas.map((o) => o.prazoPagamento).find(Boolean) ?? forn?.prazoPagamento ?? "28");
     const cfg = await lerCfgCompras(tx);
     let esc: Escolha;
     if (p.data) {
@@ -318,8 +325,12 @@ export async function reprogramarCompra(id: number, p: { fornecedorId?: number |
     }
     // itens passam a ser deste fornecedor (preço atual dele fica no cadastro do item)
     if (novoF && novoF !== pc.fornecedorId) {
-      const its = await tx.pedidoCompraItem.findMany({ where: { pedidoCompraId: id } });
-      for (const i of its) await tx.item.updateMany({ where: { id: i.itemId, fornecedorId: null }, data: { fornecedorId: novoF } });
+      for (const i of itensPc) {
+        await tx.item.updateMany({ where: { id: i.itemId, fornecedorId: null }, data: { fornecedorId: novoF } });
+        // o preço da compra passa a ser o que este fornecedor cobra pela matéria-prima (se estiver na aba Fornecedores)
+        const of = ofertas.find((o) => o.itemId === i.itemId);
+        if (of?.preco != null) await tx.pedidoCompraItem.update({ where: { id: i.id }, data: { precoUnitario: of.preco } });
+      }
     }
     await tx.pedidoCompra.update({
       where: { id },

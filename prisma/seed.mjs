@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { carregarFechaduras } from "./fechaduras.mjs";
 import { carregarRoteiros } from "./roteiros.mjs";
+import { carregarFotos } from "./fotos.mjs";
 
 const prisma = new PrismaClient();
 
@@ -114,6 +115,15 @@ async function main() {
   for (const nome of ["Bradesco", "Santander"]) await prisma.contaBancaria.upsert({ where: { nome }, update: {}, create: { nome } });
   await carregarFechaduras(prisma);
   await carregarRoteiros(prisma);
+  await carregarFotos(prisma);
+  // aba Fornecedores: item que já tem fornecedor aparece na lista dele (só cria o que falta)
+  const ligados = await prisma.item.findMany({ where: { fornecedorId: { not: null }, ativo: true }, select: { id: true, fornecedorId: true, precoCompra: true, loteMinimo: true } });
+  if (ligados.length) {
+    await prisma.fornecedorItem.createMany({
+      data: ligados.map((i) => ({ fornecedorId: i.fornecedorId, itemId: i.id, preco: i.precoCompra, compraMinima: i.loteMinimo })),
+      skipDuplicates: true,
+    });
+  }
   console.log("Carga inicial concluída.");
 }
 

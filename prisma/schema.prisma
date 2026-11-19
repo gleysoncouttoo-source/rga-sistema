@@ -207,6 +207,7 @@ model Item {
   lotes          Lote[]
   apontamentos   Apontamento[]
   processos      ProcessoProducao[]
+  ofertas        FornecedorItem[]
   criadoEm       DateTime           @default(now())
 }
 
@@ -245,23 +246,59 @@ model Reserva {
 }
 
 model Fornecedor {
-  id               Int              @id @default(autoincrement())
-  nome             String
-  chavePix         String?
-  banco            String? // dados para transferência
-  cnpj             String?
-  contato          String?
-  telefone         String?
-  email            String?
-  prazoPagamento   String           @default("28") // dias após a compra, uma parcela por número: "28" ou "28/42/56"
-  prazoEntregaDias Int              @default(7) // dias entre a compra e a chegada
-  ativo            Boolean          @default(true)
+  id                Int              @id @default(autoincrement())
+  nome              String
+  chavePix          String?
+  banco             String? // dados para transferência
+  cnpj              String?
+  contato           String?
+  telefone          String?
+  email             String?
+  prazoPagamento    String           @default("28") // dias após a compra, uma parcela por número: "28" ou "28/42/56"
+  prazoEntregaDias  Int              @default(7) // dias entre a compra e a chegada
+  ativo             Boolean          @default(true)
+  observacao        String?
+  // cadastro completo (18/11)
+  razaoSocial       String?
+  inscricaoEstadual String?
+  categoria         String? // o que fornece: Aço, Zamac, Insumos, Embalagem...
+  whatsapp          String?
+  site              String?
+  cep               String?
+  endereco          String? // rua e número
+  bairro            String?
+  cidade            String?
+  uf                String?
+  formaPagamento    String? // Boleto, Pix, Transferência, Cartão, Dinheiro
+  frete             String? // CIF (fornecedor paga) ou FOB (nós pagamos)
+  valorFrete        Float?
+  pedidoMinimo      Float? // valor mínimo do pedido em R$
+  itens             Item[]
+  pedidos           PedidoCompra[]
+  precos            PrecoHistorico[]
+  boletos           ContaPagar[]
+  ofertas           FornecedorItem[]
+  criadoEm          DateTime         @default(now())
+}
+
+// O que cada fornecedor vende: preço, prazo de pagamento, prazo de entrega e compra mínima de cada matéria-prima.
+// Prazo vazio = usa o prazo geral do fornecedor. O fornecedor principal do item (Item.fornecedorId) é o que as compras usam.
+model FornecedorItem {
+  id               Int        @id @default(autoincrement())
+  fornecedorId     Int
+  fornecedor       Fornecedor @relation(fields: [fornecedorId], references: [id], onDelete: Cascade)
+  itemId           Int
+  item             Item       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  preco            Float? // R$ por unidade do item
+  prazoPagamento   String? // "28" ou "28/42/56"
+  prazoEntregaDias Int?
+  compraMinima     Float? // na unidade do item
+  codigoFornecedor String? // código do produto no catálogo do fornecedor
   observacao       String?
-  itens            Item[]
-  pedidos          PedidoCompra[]
-  precos           PrecoHistorico[]
-  boletos          ContaPagar[]
-  criadoEm         DateTime         @default(now())
+  atualizadoEm     DateTime   @default(now()) @updatedAt
+  criadoEm         DateTime   @default(now())
+
+  @@unique([fornecedorId, itemId])
 }
 
 model PedidoVenda {
