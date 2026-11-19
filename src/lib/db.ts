@@ -7,7 +7,7 @@ const g = globalThis as unknown as { prismaBase?: PrismaClient; prismaDb?: Prism
 const base = g.prismaBase ?? new PrismaClient();
 
 // tabelas que não entram no histórico (geradas pelo sistema ou já são um registro)
-const FORA = new Set(["Sessao", "Auditoria", "Alteracao", "ImportacaoVenda", "ImportacaoExtrato", "MovimentoBanco", "ShopeeConexao", "AdsLinha", "Necessidade", "Reserva", "MovimentoEstoque", "PrecoHistorico", "RecordeVenda"]);
+const FORA = new Set(["Sessao", "Auditoria", "Alteracao", "ImportacaoVenda", "ImportacaoExtrato", "MovimentoBanco", "Comprovante", "ShopeeConexao", "AdsLinha", "Necessidade", "Reserva", "MovimentoEstoque", "PrecoHistorico", "RecordeVenda"]);
 const IGNORAR = new Set(["criadoEm", "atualizadoEm", "tentativas", "bloqueadoAte", "dados"]);
 const SIGILO = new Set(["senhaHash", "pinHash", "accessToken", "refreshToken"]);
 

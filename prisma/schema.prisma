@@ -59,6 +59,7 @@ model Funcionario {
   rg                String?
   nascimento        DateTime?
   telefone          String?
+  email             String? // recebe o comprovante de pagamento
   endereco          String?
   contatoEmergencia String?
   cargo             String // Diretor, Gestor, Funcionário
@@ -402,6 +403,8 @@ model ContaPagar {
   agencia        String?
   contaRecebedor String?
   documento      String? // CPF ou CNPJ de quem recebe
+  notaFiscal     String? // número da nota a que o pagamento se refere
+  comprovantes   Comprovante[]
   descricao      String
   categoria      String           @default("Fornecedor") // Fornecedor, Colaboradores, Condomínio, Energia, Impostos, Outras
   observacao     String?
@@ -502,6 +505,24 @@ model MovimentoBanco {
 
   @@unique([banco, chave])
   @@index([data])
+}
+
+// Comprovante de pagamento (foto ou PDF) guardado no próprio banco. O token é o link que vai para quem recebeu.
+model Comprovante {
+  id           Int        @id @default(autoincrement())
+  contaPagarId Int
+  contaPagar   ContaPagar @relation(fields: [contaPagarId], references: [id], onDelete: Cascade)
+  nome         String
+  tipo         String
+  tamanho      Int
+  dados        Bytes
+  token        String     @unique
+  enviadoEm    DateTime?
+  enviadoPara  String?
+  usuario      String?
+  criadoEm     DateTime   @default(now())
+
+  @@index([contaPagarId])
 }
 
 // Dinheiro a receber: clientes, vendas no site (Shopee etc.), serviços

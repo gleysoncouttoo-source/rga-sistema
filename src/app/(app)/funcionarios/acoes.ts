@@ -39,6 +39,7 @@ export async function salvarFuncionario(form: FormData) {
     rg: txt(form, "rg"),
     nascimento: dt(form, "nascimento"),
     telefone: txt(form, "telefone"),
+    email: txt(form, "email"),
     chavePix: txt(form, "chavePix"),
     endereco: txt(form, "endereco"),
     contatoEmergencia: txt(form, "contatoEmergencia"),
