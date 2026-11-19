@@ -303,3 +303,15 @@ body.com-instalar { padding-bottom: 84px; }
 .sem-internet { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 10px; padding: 24px; background: var(--grafite); color: #fff; }
 .sem-internet img { width: 160px; }
 .sem-internet p { color: var(--grafite-txt); max-width: 320px; }
+
+/* Anexar: câmera ou galeria/arquivos */
+.escolher-arq { position: relative; display: inline-flex; }
+.escolher-arq > .btn svg { opacity: .7; }
+.escolher-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; min-width: 240px; background: var(--card); border: 1px solid var(--borda); border-top: 3px solid var(--acento); border-radius: 10px; box-shadow: 0 10px 28px rgba(24,26,29,.18); padding: 4px; display: flex; flex-direction: column; }
+.escolher-menu button { font: inherit; font-weight: 600; font-size: .95rem; display: flex; align-items: center; gap: 10px; text-align: left; background: none; border: 0; border-radius: 7px; padding: 12px; color: var(--texto); cursor: pointer; white-space: nowrap; }
+.escolher-menu button + button { border-top: 1px solid var(--linha); border-radius: 0 0 7px 7px; }
+.escolher-menu button:hover, .escolher-menu button:active { background: var(--acento-claro); }
+.escolher-menu svg { color: var(--acento-escuro); flex-shrink: 0; }
+.anexo-nome { font-size: .82rem; color: var(--suave); display: inline-flex; align-items: center; gap: 6px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.anexo-campo { position: relative; display: inline-flex; }
+.anexo-ok { position: absolute; left: 12px; bottom: 0; opacity: 0; width: 1px; height: 1px; pointer-events: none; }

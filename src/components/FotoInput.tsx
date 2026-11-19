@@ -1,12 +1,11 @@
 "use client";
 import { useState } from "react";
+import EscolherArquivo from "./EscolherArquivo";
 
 /** Escolhe uma foto (câmera ou arquivo), reduz para miniatura (320 px) e manda em um campo escondido. */
 export default function FotoInput({ name = "foto", atual }: { name?: string; atual?: string | null }) {
   const [foto, setFoto] = useState<string>(atual ?? "");
-  async function escolher(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (!f) return;
+  function escolher(f: File) {
     const url = URL.createObjectURL(f);
     const img = new Image();
     img.onload = () => {
@@ -25,11 +24,8 @@ export default function FotoInput({ name = "foto", atual }: { name?: string; atu
     <div className="foto-input">
       <div className="mini grande">{foto ? <img src={foto} alt="" /> : <span>sem foto</span>}</div>
       <div className="acoes">
-        <label className="btn sec peq" style={{ flexDirection: "row", color: "var(--texto)" }}>
-          {foto ? "Trocar foto" : "Adicionar foto"}
-          <input type="file" accept="image/*" onChange={escolher} style={{ display: "none" }} />
-        </label>
-        {foto && <button type="button" className="btn sec peq" onClick={() => setFoto("")}>Tirar foto</button>}
+        <EscolherArquivo rotulo={foto ? "Trocar foto" : "Adicionar foto"} onArquivo={escolher} />
+        {foto && <button type="button" className="btn sec peq" onClick={() => setFoto("")}>Remover foto</button>}
       </div>
       <input type="hidden" name={name} value={foto} />
     </div>

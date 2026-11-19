@@ -1,13 +1,12 @@
 "use client";
 import { useState } from "react";
+import EscolherArquivo from "./EscolherArquivo";
 
 /** Escolhe a foto ou o PDF do comprovante. Foto é reduzida (até 1800 px) para caber; PDF vai como está (até 4 MB). */
 export default function ComprovanteInput({ opcional = false }: { opcional?: boolean }) {
   const [arq, setArq] = useState(""), [nome, setNome] = useState(""), [erro, setErro] = useState("");
-  async function escolher(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
+  function escolher(f: File) {
     setErro(""); setArq(""); setNome("");
-    if (!f) return;
     if (f.type === "application/pdf") {
       if (f.size > 4 * 1024 * 1024) { setErro("PDF maior que 4 MB. Salve de novo em tamanho menor."); return; }
       const r = new FileReader();
@@ -33,7 +32,14 @@ export default function ComprovanteInput({ opcional = false }: { opcional?: bool
   }
   return (
     <>
-      <input type="file" accept="image/*,application/pdf" onChange={escolher} required={!opcional && !arq} />
+      <span className="anexo-campo">
+        <EscolherArquivo rotulo={arq ? "Trocar" : "Anexar foto ou PDF"} accept="image/*,application/pdf" onArquivo={escolher} />
+        {!opcional && (
+          <input className="anexo-ok" tabIndex={-1} aria-hidden="true" required value={arq ? "ok" : ""} onChange={() => {}}
+            ref={(el) => el?.setCustomValidity(arq ? "" : "Escolha a foto ou o PDF do comprovante.")} />
+        )}
+      </span>
+      {nome && <span className="anexo-nome" title={nome}>📎 {nome}</span>}
       {erro && <span style={{ color: "var(--erro)", fontSize: ".82rem" }}>{erro}</span>}
       <input type="hidden" name="arq" value={arq} />
       <input type="hidden" name="arqNome" value={nome} />
