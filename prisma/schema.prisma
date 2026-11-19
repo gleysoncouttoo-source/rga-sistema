@@ -423,6 +423,8 @@ model ContaPagar {
   banco          String? // Santander, Bradesco
   status         String           @default("aberto") // previsto, aberto, pago
   pagoEm         DateTime?
+  // entra no custo dos produtos do mês? null = segue a regra da categoria (Custos → Contas no custo)
+  noCusto        Boolean?
   criadoEm       DateTime         @default(now())
 
   @@unique([recorrenteId, competencia])

@@ -1,3 +1,4 @@
+import { custosUnitarios, tempoTxt } from "@/lib/custoProduto";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -47,6 +48,11 @@ export default async function ProdutoPage({ params, searchParams }: { params: Pr
   const vis = new Set<number>([id]);
   const desce = (x: typeof it) => { for (const c of x.componentes) { const f = mapa.get(c.filhoId); if (!f || vis.has(f.id)) continue; vis.add(f.id); if (f.origem === "fabricado" || f.passos.length) partes.push(f); desce(f); } };
   desce(it);
+  // tempo de produção de 1 unidade (cronômetro dos lotes ou recorde), por parte
+  const custo = await custosUnitarios();
+  const cu = custo(id);
+  const tempoPartes = it.componentes.map((c) => ({ c, seg: custo(c.filhoId).seg * c.quantidade })).filter((x) => x.seg > 0);
+  const tempoProprio = Math.max(0, cu.seg - tempoPartes.reduce((s, x) => s + x.seg, 0));
   const candidatos = todos.filter((i) => i.id !== id && i.tipo !== "produto");
 
   return (
@@ -79,6 +85,29 @@ export default async function ProdutoPage({ params, searchParams }: { params: Pr
           {edita && <div className="inteiro acoes"><button className="btn">Salvar</button></div>}
         </form>
       </div>
+
+      {it.tipo !== "materia_prima" && it.tipo !== "insumo" && (
+        <div className="card tabela">
+          <div className="linha-form" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+            <b>Tempo para produzir 1 {it.tipo === "produto" ? "fechadura" : "unidade"}</b>
+            <span style={{ fontSize: "1.4rem", fontWeight: 800 }}>{tempoTxt(cu.seg)}</span>
+          </div>
+          {cu.seg > 0 && (
+            <table style={{ marginTop: 8 }}>
+              <thead><tr><th>Parte</th><th className="n">Qtd</th><th className="n">Tempo</th></tr></thead>
+              <tbody>
+                {tempoPartes.map(({ c, seg }) => <tr key={c.filhoId}><td><Link href={`/produtos/${c.filhoId}`}>{c.filho.codigo ?? c.filho.nome}</Link> <small className="suave">{c.filho.nome}</small></td><td className="n">{num(c.quantidade, 2)}</td><td className="n">{tempoTxt(seg)}</td></tr>)}
+                {tempoProprio > 0 && <tr><td>{it.tipo === "peca" ? "Processo desta peça" : "Montagem"}</td><td className="n">1</td><td className="n">{tempoTxt(tempoProprio)}</td></tr>}
+              </tbody>
+            </table>
+          )}
+          <p className="suave" style={{ marginBottom: 0 }}>
+            Soma do tempo das operações de cada peça: cronômetro dos lotes dos últimos 30 dias ou, sem lançamento, o recorde.
+            {cu.semTempo.length > 0 && ` Sem tempo ainda: ${cu.semTempo.slice(0, 4).join(", ")}${cu.semTempo.length > 4 ? "…" : "."}`}
+            {cu.pecasSemMo.length > 0 && ` Peças sem operação ligada (fora da conta): ${cu.pecasSemMo.slice(0, 4).join(", ")}${cu.pecasSemMo.length > 4 ? "…" : "."}`}
+          </p>
+        </div>
+      )}
 
       <h2>Processo {it.tipo === "produto" ? "de montagem final" : it.tipo === "conjunto" ? "de montagem" : "desta peça"}</h2>
       <div className="card tabela">

@@ -1,7 +1,8 @@
-type Aba = "producao" | "processos";
+type Aba = "producao" | "processos" | "tempos";
 const ABAS: [Aba, string, string][] = [
   ["producao", "Produção do dia", "/producao"],
   ["processos", "Processos das peças", "/producao/processos"],
+  ["tempos", "Tempo por produto", "/producao/tempos"],
 ];
 export default function AbasProducao({ ativo }: { ativo: Aba }) {
   return (

@@ -145,7 +145,7 @@ export default async function Lucros({ searchParams }: { searchParams: Promise<{
         <h2 style={{ marginTop: 0 }}>Parâmetros</h2>
         <form action={salvarCfg} className="campos" style={{ alignItems: "end" }}>
           <label>Imposto sobre a venda (%)<input name="impostoVendaPct" inputMode="decimal" defaultValue={cfg.impostoVendaPct} disabled={!edita} /></label>
-          <label>Energia e despesas (% sobre material + mão de obra)<input name="custoExtraPct" inputMode="decimal" defaultValue={cfg.custoExtraPct} disabled={!edita} /></label>
+          <label>Energia e despesas (% sobre material + mão de obra) — só enquanto não houver contas pagas marcadas em Custos → Contas no custo<input name="custoExtraPct" inputMode="decimal" defaultValue={cfg.custoExtraPct} disabled={!edita} /></label>
           <label>Embalagem e outros por unidade (R$)<input name="custoExtraUnidade" inputMode="decimal" defaultValue={cfg.custoExtraUnidade} disabled={!edita} /></label>
           {edita && <button className="btn sec">Salvar</button>}
         </form>

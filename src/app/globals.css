@@ -277,3 +277,11 @@ details.editar[open] > summary { margin-bottom: 10px; }
 .ficha div small { display: block; color: var(--suave); font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
 .ficha div { font-size: .92rem; }
 .form-forn .campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+
+/* Custos → Contas no custo: uma categoria por linha */
+.grupos-custo { padding: 4px 18px; }
+.grupo-custo { padding: 12px 0; border-bottom: 1px solid var(--borda); }
+.grupo-custo:last-child { border-bottom: 0; }
+.grupo-custo table { margin-top: 6px; }
+.marcar-auto { display: inline-flex; cursor: pointer; }
+.marcar-auto input { width: 18px; height: 18px; accent-color: var(--grafite); }
