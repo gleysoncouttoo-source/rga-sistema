@@ -1,7 +1,5 @@
 // Contas pagas que entram no custo dos produtos (Custos → Contas no custo).
-// Soma as contas pagas no mês que estão marcadas e divide pelas fechaduras produzidas no mês:
-//   despesa por fechadura = total das contas marcadas ÷ fechaduras produzidas (último passo do processo).
-// Se o mês ainda não tem produção lançada, divide pelas fechaduras vendidas no mês.
+// Soma as contas pagas no mês que estão marcadas; a divisão pelas fechaduras (pelo tempo de produção) fica em custoProduto.ts.
 import "server-only";
 import { db } from "@/lib/db";
 
@@ -46,16 +44,20 @@ export async function mesDoCusto() {
   return mesValido(r?.valor) ?? mesAtual();
 }
 
-/** Fechaduras terminadas no mês (último passo do processo de cada produto) e vendidas no mês. */
+/** Fechaduras terminadas no mês (último passo do processo de cada produto) e vendidas no mês, por produto. */
 async function unidadesDoMes(mes: string) {
   const { de, ate } = faixa(mes);
-  const produtos = await db.item.findMany({ where: { tipo: "produto" }, select: { passos: { select: { id: true }, orderBy: { ordem: "desc" }, take: 1 } } });
-  const ultimos = produtos.map((p) => p.passos[0]?.id).filter((x): x is number => !!x);
+  const produtos = await db.item.findMany({ where: { tipo: "produto" }, select: { id: true, passos: { select: { id: true }, orderBy: { ordem: "desc" }, take: 1 } } });
+  const doPasso = new Map(produtos.filter((p) => p.passos[0]).map((p) => [p.passos[0].id, p.id]));
   const [feitos, vendidos] = await Promise.all([
-    ultimos.length ? db.apontamento.aggregate({ where: { data: { gte: de, lt: ate }, passoId: { in: ultimos } }, _sum: { quantidade: true } }) : null,
-    db.pedidoVendaItem.aggregate({ where: { item: { tipo: "produto" }, pedidoVenda: { status: { not: "cancelado" }, dataPedido: { gte: de, lt: ate } } }, _sum: { quantidade: true } }),
+    doPasso.size ? db.apontamento.groupBy({ by: ["passoId"], where: { data: { gte: de, lt: ate }, passoId: { in: [...doPasso.keys()] } }, _sum: { quantidade: true } }) : [],
+    db.pedidoVendaItem.groupBy({ by: ["itemId"], where: { item: { tipo: "produto" }, pedidoVenda: { status: { not: "cancelado" }, dataPedido: { gte: de, lt: ate } } }, _sum: { quantidade: true } }),
   ]);
-  return { produzidas: feitos?._sum.quantidade ?? 0, vendidas: vendidos._sum.quantidade ?? 0 };
+  const prod = new Map<number, number>(), vend = new Map<number, number>();
+  for (const f of feitos) { const id = doPasso.get(f.passoId!); if (id) prod.set(id, (prod.get(id) ?? 0) + (f._sum.quantidade ?? 0)); }
+  for (const v of vendidos) vend.set(v.itemId, v._sum.quantidade ?? 0);
+  const soma = (m: Map<number, number>) => [...m.values()].reduce((x, y) => x + y, 0);
+  return { prod, vend, produzidas: soma(prod), vendidas: soma(vend) };
 }
 
 /** Todas as contas pagas no mês, com o que entra e o que sai do custo. */
@@ -85,15 +87,9 @@ export async function contasDoMes(mes: string) {
   const noCusto = linhas.reduce((s, l) => s + (l.entra ? l.valor : 0), 0);
   const base = un.produzidas > 0 ? { un: un.produzidas, por: "produzidas" as const } : un.vendidas > 0 ? { un: un.vendidas, por: "vendidas" as const } : { un: 0, por: "nenhuma" as const };
   return {
-    mes, total, noCusto, ...un, base,
-    porUnidade: base.un > 0 ? noCusto / base.un : null,
+    mes, total, noCusto, produzidas: un.produzidas, vendidas: un.vendidas, base,
+    // fechaduras de cada produto que dividem as contas: as produzidas no mês ou, sem produção lançada, as vendidas
+    unidades: un.produzidas > 0 ? un.prod : un.vend,
     grupos: [...grupos.values()].sort((a, b) => b.total - a.total),
   };
-}
-
-/** Despesa por fechadura do mês usado no custo (null = sem contas marcadas ou sem produção/venda). */
-export async function despesaPorUnidade() {
-  const mes = await mesDoCusto();
-  const r = await contasDoMes(mes);
-  return { mes, porUnidade: r.noCusto > 0 ? r.porUnidade : null, base: r.base, noCusto: r.noCusto };
 }
