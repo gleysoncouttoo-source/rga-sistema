@@ -1,8 +1,11 @@
 // Custo de cada produto/peça, o mesmo em todo o sistema (Custos, Lucros, Lucro por anúncio):
-//   material (estrutura do Estoque) + mão de obra (operações ligadas às peças, valor da tela de Custos) + despesas (%) + extra por unidade
+//   material (estrutura do Estoque) + mão de obra (operações ligadas às peças, valor da tela de Custos) + despesas + extra por unidade
+// Despesas da fechadura = contas pagas do mês marcadas em Custos → Contas no custo ÷ fechaduras produzidas no mês.
+// Sem contas marcadas (ou peça/conjunto), usa o % de despesas do Lucros.
 import "server-only";
 import { db } from "@/lib/db";
 import { custoHora, lerConfig } from "@/lib/config";
+import { despesaPorUnidade } from "@/lib/despesasCusto";
 
 export type CfgLucro = { impostoVendaPct: number; custoExtraPct: number; custoExtraUnidade: number };
 export async function lerCfgLucro(): Promise<CfgLucro> {
@@ -41,15 +44,16 @@ export async function moPorOperacao(dias = 30) {
   return { mo: m, temSalario: chFabrica != null };
 }
 
-export type CustoUnit = { material: number; mo: number; despesas: number; extra: number; total: number; pecasSemMo: string[] };
+export type CustoUnit = { material: number; mo: number; despesas: number; despesasDe: "contas" | "pct"; extra: number; total: number; pecasSemMo: string[] };
 
 /** Função que devolve o custo de 1 unidade de qualquer item (desce a estrutura). */
 export async function custosUnitarios(cfgL?: CfgLucro, dias = 30) {
   const cfg = cfgL ?? (await lerCfgLucro());
-  const [itens, ligs, { mo, temSalario }] = await Promise.all([
+  const [itens, ligs, { mo, temSalario }, rateio] = await Promise.all([
     db.item.findMany({ select: { id: true, codigo: true, nome: true, tipo: true, origem: true, precoCompra: true, componentes: { select: { filhoId: true, quantidade: true } } } }),
     db.itemOperacao.findMany(),
     moPorOperacao(dias),
+    despesaPorUnidade(),
   ]);
   const mapa = new Map(itens.map((i) => [i.id, i]));
   const opsDe = new Map<number, typeof ligs>();
@@ -75,10 +79,11 @@ export async function custosUnitarios(cfgL?: CfgLucro, dias = 30) {
   };
   const fn = (id: number): CustoUnit => {
     const b = base(id);
-    const despesas = (b.material + b.mo) * cfg.custoExtraPct / 100;
-    return { material: b.material, mo: b.mo, despesas, extra: cfg.custoExtraUnidade, total: b.material + b.mo + despesas + cfg.custoExtraUnidade, pecasSemMo: [...b.semMo] };
+    const porContas = mapa.get(id)?.tipo === "produto" && rateio.porUnidade != null;
+    const despesas = porContas ? rateio.porUnidade! : (b.material + b.mo) * cfg.custoExtraPct / 100;
+    return { material: b.material, mo: b.mo, despesas, despesasDe: porContas ? "contas" : "pct", extra: cfg.custoExtraUnidade, total: b.material + b.mo + despesas + cfg.custoExtraUnidade, pecasSemMo: [...b.semMo] };
   };
-  return Object.assign(fn, { temSalario, cfg });
+  return Object.assign(fn, { temSalario, cfg, rateio });
 }
 
 // Sugestão de ligação peça ↔ operação pelo nome (o usuário confere depois)

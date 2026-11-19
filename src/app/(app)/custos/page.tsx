@@ -5,6 +5,7 @@ import { pode } from "@/lib/permissoes";
 import { custoHora, lerConfig } from "@/lib/config";
 import { brl, num, pecasHora } from "@/lib/formato";
 import { custosUnitarios, lerCfgLucro } from "@/lib/custoProduto";
+import { nomeMes } from "@/lib/despesasCusto";
 
 async function salvarConfig(form: FormData) {
   "use server";
@@ -71,10 +72,15 @@ export default async function Custos() {
         </p>
       </div>
       <h2>Custo médio por produto</h2>
-      <p className="suave">Material da estrutura + mão de obra real dos lançamentos da semana (últimos 7 dias) e do mês (últimos 30 dias) + {num(cfgL.custoExtraPct, 1)}% de despesas{cfgL.custoExtraUnidade ? ` + ${brl(cfgL.custoExtraUnidade)} por unidade` : ""}. Operação sem lançamento no período usa o tempo do recorde.</p>
+      <p className="suave">
+        Material da estrutura + mão de obra real dos lançamentos da semana (últimos 7 dias) e do mês (últimos 30 dias) + despesas{cfgL.custoExtraUnidade ? ` + ${brl(cfgL.custoExtraUnidade)} por unidade` : ""}. Operação sem lançamento no período usa o tempo do recorde.{" "}
+        {cSemana.rateio.porUnidade != null
+          ? <>Despesas = contas pagas de {nomeMes(cSemana.rateio.mes)} marcadas em <a href="/custos/despesas">Contas no custo</a> ({brl(cSemana.rateio.noCusto, 0)} ÷ {num(cSemana.rateio.base.un)} fechaduras {cSemana.rateio.base.por}) = <b>{brl(cSemana.rateio.porUnidade)}</b> por fechadura.</>
+          : <>Despesas = {num(cfgL.custoExtraPct, 1)}% sobre material + mão de obra, até ter contas pagas marcadas em <a href="/custos/despesas">Contas no custo</a>.</>}
+      </p>
       <div className="card tabela">
         <table>
-          <thead><tr><th>Produto</th><th className="n">Material</th><th className="n">MO semana</th><th className="n"><b>Custo semana</b></th><th className="n">MO mês</th><th className="n"><b>Custo mês</b></th><th className="n">Variação</th><th className="n">Montados semana / mês</th></tr></thead>
+          <thead><tr><th>Produto</th><th className="n">Material</th><th className="n">Despesas</th><th className="n">MO semana</th><th className="n"><b>Custo semana</b></th><th className="n">MO mês</th><th className="n"><b>Custo mês</b></th><th className="n">Variação</th><th className="n">Montados semana / mês</th></tr></thead>
           <tbody>{produtos.map((p) => {
             const s = cSemana(p.id), m = cMes(p.id);
             const v = m.total ? ((s.total - m.total) / m.total) * 100 : null;
@@ -82,6 +88,7 @@ export default async function Custos() {
               <tr key={p.id}>
                 <td><a href={`/produtos/${p.id}`} className="com-foto" style={{ color: "inherit" }}><span className="mini">{p.foto ? <img src={p.foto} alt="" /> : "sem foto"}</span><span className="t"><b>{p.codigo}</b><small>{p.nome}</small></span></a></td>
                 <td className="n">{brl(m.material)}</td>
+                <td className="n">{brl(m.despesas + m.extra)}</td>
                 <td className="n">{brl(s.mo, 3)}</td>
                 <td className="n"><b>{brl(s.total)}</b></td>
                 <td className="n">{brl(m.mo, 3)}</td>
