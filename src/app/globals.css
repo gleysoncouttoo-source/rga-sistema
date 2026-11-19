@@ -285,3 +285,21 @@ details.editar[open] > summary { margin-bottom: 10px; }
 .grupo-custo table { margin-top: 6px; }
 .marcar-auto { display: inline-flex; cursor: pointer; }
 .marcar-auto input { width: 18px; height: 18px; accent-color: var(--grafite); }
+
+/* App no celular: barra "Instalar app" fixa no rodapé */
+body.com-instalar { padding-bottom: 84px; }
+.instalar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; padding: 0 10px calc(10px + env(safe-area-inset-bottom)); pointer-events: none; }
+.instalar > * { pointer-events: auto; }
+.instalar-barra { max-width: 560px; margin: 0 auto; display: flex; align-items: center; gap: 10px; background: var(--grafite); color: #fff; border-radius: 14px; border-top: 3px solid var(--acento); padding: 10px 10px 10px 12px; box-shadow: 0 10px 30px rgba(24, 26, 29, .35); }
+.instalar-barra img { width: 40px; height: 40px; border-radius: 10px; flex: none; }
+.instalar-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.instalar-txt b { font-size: .98rem; }
+.instalar-txt span { font-size: .8rem; color: var(--grafite-txt); }
+.btn.instalar-btn { background: var(--acento); color: var(--grafite); border-color: var(--acento); font-weight: 700; white-space: nowrap; }
+.btn.instalar-btn:hover { background: var(--acento-escuro); color: var(--grafite); border-color: var(--acento-escuro); }
+.instalar-x { background: none; border: 0; color: var(--grafite-txt); font-size: 1.5rem; line-height: 1; padding: 4px 6px; cursor: pointer; }
+.instalar-ajuda { max-width: 560px; margin: 0 auto 8px; background: #fff; color: var(--texto); border: 1px solid var(--borda); border-radius: 12px; padding: 12px 14px; font-size: .92rem; box-shadow: 0 10px 30px rgba(24, 26, 29, .2); }
+.instalar-ok { display: block; margin-top: 8px; background: none; border: 0; color: var(--acento-escuro); font-weight: 700; padding: 0; cursor: pointer; }
+.sem-internet { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 10px; padding: 24px; background: var(--grafite); color: #fff; }
+.sem-internet img { width: 160px; }
+.sem-internet p { color: var(--grafite-txt); max-width: 320px; }
