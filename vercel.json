@@ -1,3 +1,6 @@
 {
-  "crons": [{ "path": "/api/shopee/sincronizar", "schedule": "0 9 * * *" }]
+  "crons": [
+    { "path": "/api/shopee/sincronizar", "schedule": "0 9 * * *" },
+    { "path": "/api/notificacoes/manha", "schedule": "30 10 * * *" }
+  ]
 }

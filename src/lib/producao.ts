@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { custoHora, lerConfig } from "./config";
+import { avisar } from "./notificacoes";
 
 export type ResultadoApontamento = {
   apontamentoId: number;
@@ -37,6 +38,11 @@ export async function registrarApontamento(p: {
   if (novoRecorde) {
     await db.recorde.create({
       data: { operacaoId: op.id, funcionarioId: func.id, apontamentoId: ap.id, segPorPeca, status: "pendente" },
+    });
+    await avisar("recorde", {
+      titulo: "Novo recorde para confirmar",
+      texto: `${func.nome} · ${op.nome}: ${Math.round(3600 / segPorPeca)} peças/hora${recordeAtual ? ` (antes ${Math.round(3600 / recordeAtual)})` : ""}`,
+      link: "/producao", tag: `recorde-${op.id}`,
     });
   }
   return {

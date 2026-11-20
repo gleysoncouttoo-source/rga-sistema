@@ -38,8 +38,22 @@ model Usuario {
   abasLiberadas String? // JSON: abas que o diretor liberou para este login (vazio = todas que o perfil permite)
   pendente      Boolean      @default(false) // criou a conta pela tela Criar conta e espera liberação
   cargoPedido   String? // cargo que a pessoa informou ao criar a conta
+  notificacoes  String? // JSON: avisos no celular que este login escolheu receber (vazio = todos da sua área)
   sessoes       Sessao[]
+  aparelhos     AparelhoPush[]
   criadoEm      DateTime     @default(now())
+}
+
+// Celular ou computador que aceitou receber avisos (notificação push) de um login
+model AparelhoPush {
+  id        Int      @id @default(autoincrement())
+  usuarioId Int
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  nome      String? // ex.: "Android", "iPhone", "Computador"
+  criadoEm  DateTime @default(now())
 }
 
 model Sessao {

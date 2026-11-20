@@ -40,3 +40,31 @@ self.addEventListener("fetch", (e) => {
     );
   }
 });
+
+// Avisos do sistema (notificação push): mostra o aviso e, ao tocar, abre a tela certa.
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { texto: e.data ? e.data.text() : "" }; }
+  e.waitUntil(
+    self.registration.showNotification(d.titulo || "Sistema R.G.A", {
+      body: d.texto || "",
+      icon: "/app/icone-192.png",
+      badge: "/app/icone-192.png",
+      tag: d.tag || undefined,
+      data: { link: d.link || "/" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const alvo = new URL((e.notification.data && e.notification.data.link) || "/", self.location.origin).href;
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((janelas) => {
+      for (const j of janelas) {
+        if (j.url.startsWith(self.location.origin) && "focus" in j) { j.navigate(alvo); return j.focus(); }
+      }
+      return self.clients.openWindow(alvo);
+    })
+  );
+});

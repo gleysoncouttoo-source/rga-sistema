@@ -315,3 +315,9 @@ body.com-instalar { padding-bottom: 84px; }
 .anexo-nome { font-size: .82rem; color: var(--suave); display: inline-flex; align-items: center; gap: 6px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .anexo-campo { position: relative; display: inline-flex; }
 .anexo-ok { position: absolute; left: 12px; bottom: 0; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+
+/* Avisos no celular (Minha conta) */
+.avisos-aparelho { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px; border: 1px solid var(--borda); border-radius: 12px; background: var(--bg); }
+.avisos-status { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.avisos-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+@media (max-width: 640px) { .avisos-aparelho .btn.destaque { width: 100%; } }

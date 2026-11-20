@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { auditar, usuarioAtual } from "@/lib/auth";
 import MarcaCentro from "@/components/MarcaCentro";
+import { avisar } from "@/lib/notificacoes";
 
 const MAX_PENDENTES = 30; // evita que alguém encha a lista de pedidos
 const volta = (m: string) => redirect("/cadastro?erro=" + encodeURIComponent(m));
@@ -25,6 +26,7 @@ async function criarConta(form: FormData) {
     data: { nome, email, senhaHash: await bcrypt.hash(senha, 10), perfilId: perfil.id, ativo: false, pendente: true, abasLiberadas: "[]" },
   });
   await auditar(nome, "criou conta (aguardando liberação)", email);
+  await avisar("cadastro", { titulo: "Pedido de acesso", texto: `${nome} criou conta e espera liberação.`, link: "/usuarios", tag: "cadastro" });
   redirect("/cadastro?ok=1");
 }
 
