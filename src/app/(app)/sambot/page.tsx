@@ -179,7 +179,7 @@ export default async function Cotacao({ searchParams }: { searchParams: Promise<
           {exemplo && (
             <details style={{ marginTop: 12 }}>
               <summary className="suave" style={{ cursor: "pointer" }}>Ver a mensagem que o fornecedor recebe</summary>
-              <div className="bolha saida" style={{ marginTop: 10 }}>{textoPedidoCotacao(primeiroNome(exemplo.contato) || exemplo.nome, itensPor.get(exemplo.id) ?? [], remetente)}</div>
+              <div className="bolha saida" style={{ marginTop: 10 }}>{textoPedidoCotacao(primeiroNome(exemplo.contato), itensPor.get(exemplo.id) ?? [], remetente)}</div>
             </details>
           )}
         </div>

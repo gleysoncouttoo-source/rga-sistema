@@ -3,6 +3,7 @@
 import "server-only";
 import { brl, dataDia } from "./formato";
 import { guardarMensagem } from "./whatsapp";
+import { primeiro } from "./ia";
 
 export function configEnvio() {
   return {
@@ -23,10 +24,10 @@ const referencia = (c: ContaTexto) => {
 /** Assunto do e-mail: "Comprovante de pagamento boleto 3/4 referente à nota 022552" */
 export const assuntoComprovante = (c: ContaTexto) => `Comprovante de pagamento ${referencia(c)}`;
 
-/** "Olá, Carlos! Aqui é o Gleyson Couto, da R.G.A. Segue o comprovante do pagamento boleto 3/4 referente à nota 022552, no valor de R$ 1.290,50, pago em 18/11/2026. Qualquer dúvida é só chamar." */
+/** "Oi, Carlos! Aqui é o Gleyson Couto, da R.G.A. Segue o comprovante do pagamento boleto 3/4 referente à nota 022552, no valor de R$ 1.290,50, pago em 18/11/2026. Qualquer dúvida é só chamar." */
 export function textoComprovante(c: ContaTexto, nome?: string | null, remetente = "Gleyson Couto") {
-  const primeiro = String(nome ?? "").trim().split(/\s+/)[0];
-  return `Olá${primeiro ? `, ${primeiro}` : ""}! Aqui é o ${remetente}, da R.G.A. Segue o comprovante do pagamento ${referencia(c)}, no valor de ${brl(c.valor)}${c.pagoEm ? `, pago em ${dataDia(c.pagoEm)}` : ""}. Qualquer dúvida é só chamar.`;
+  const pn = primeiro(nome);
+  return `Oi${pn ? `, ${pn}` : ""}! Aqui é o ${remetente}, da R.G.A. Segue o comprovante do pagamento ${referencia(c)}, no valor de ${brl(c.valor)}${c.pagoEm ? `, pago em ${dataDia(c.pagoEm)}` : ""}. Qualquer dúvida é só chamar.`;
 }
 
 export { numeroWhats } from "./whatsapp";

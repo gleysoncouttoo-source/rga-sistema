@@ -6,7 +6,7 @@ import { dia, somaDias } from "./datas";
 import { dataDia } from "./formato";
 import { registrarPreco } from "./precos";
 import { avisarDepois } from "./notificacoes";
-import { conversarIA, iaLigada, lerPrecosSimples, type Anexo, type ItemCotado, type ResultadoIA } from "./ia";
+import { conversarIA, iaLigada, primeiro, lerPrecosSimples, type Anexo, type ItemCotado, type ResultadoIA } from "./ia";
 import { nomeRemetente, enviarMidiaDaBiblioteca, enviarModelo, enviarTexto, guardarMensagem, numeroWhats, primeiroNome, quemE, whatsLigado } from "./whatsapp";
 
 /** Segunda-feira da semana (data de calendário). */
@@ -81,7 +81,7 @@ export async function enviarPedido(cfId: number, lembrete = false) {
   const modelo = process.env.WHATSAPP_MODELO_COTACAO;
   if (!whatsLigado() || !modelo) { await db.cotacaoFornecedor.update({ where: { id: cfId }, data: { status: "pronto", erro: null } }); return false; }
   const itens = await itensDoFornecedor(f.id);
-  const nome = primeiroNome(f.contato) || f.nome;
+  const nome = primeiro(f.contato);
   try {
     await enviarModelo(numero, modelo, [nome, listaItens(itens)], textoPedidoCotacao(nome, itens, await nomeRemetente()), { fornecedorId: f.id, nome: f.contato || f.nome });
     await db.cotacaoFornecedor.update({ where: { id: cfId }, data: lembrete ? { lembradoEm: new Date(), erro: null } : { status: "enviado", enviadoEm: new Date(), erro: null } });
@@ -128,10 +128,10 @@ export async function receberMensagem(m: Entrada, opcoes: { responder: boolean; 
   try {
     r = iaLigada()
       ? await conversarIA({ papel: quem?.tipo ?? "desconhecido", nome: quem?.nome ?? m.nomePerfil ?? null, empresa: quem?.empresa ?? null, itens, historico: historico.map((h) => ({ direcao: h.direcao, texto: h.texto, quando: h.criadoEm })), mensagem: m.texto, anexos: m.anexos, midias, hoje: dataDia(dia()), remetente: await nomeRemetente() })
-      : lerPrecosSimples(m.texto, itens, await nomeRemetente());
+      : lerPrecosSimples(m.texto, itens, await nomeRemetente(), quem?.nome ?? m.nomePerfil);
   } catch (e) {
     console.error("IA do WhatsApp falhou", e);
-    r = lerPrecosSimples(m.texto, itens, await nomeRemetente());
+    r = lerPrecosSimples(m.texto, itens, await nomeRemetente(), quem?.nome ?? m.nomePerfil);
   }
 
   // preços lidos → a conferir

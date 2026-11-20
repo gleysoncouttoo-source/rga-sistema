@@ -95,7 +95,7 @@ export async function quemE(telefone: string) {
   return null;
 }
 
-export const primeiroNome = (n: string | null | undefined) => String(n ?? "").trim().split(/\s+/)[0] || "";
+export { primeiro as primeiroNome } from "./ia";
 
 // ───── Mídia: áudios, figurinhas, fotos e PDFs ─────
 

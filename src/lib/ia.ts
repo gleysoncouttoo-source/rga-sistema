@@ -6,6 +6,8 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 
 export const iaLigada = () => !!process.env.ANTHROPIC_API_KEY;
+/** Primeiro nome com só a primeira letra maiúscula ("CARLOS SOUZA" → "Carlos"). */
+export const primeiro = (n: string | null | undefined) => { const w = String(n ?? "").trim().split(/\s+/)[0] ?? ""; return w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : ""; };
 const MODELO = process.env.CLAUDE_MODELO || "claude-opus-5-5";
 
 let _cliente: Anthropic | null = null;
@@ -35,7 +37,7 @@ const SISTEMA = `Você é o Sambot, o assistente automático que cuida do WhatsA
 
 Jeito de escrever:
 - Como uma pessoa simpática da equipe de compras escreveria no WhatsApp: frases curtas, português do dia a dia do Brasil, sem formalidade de e-mail, sem markdown, sem listas com marcadores.
-- Use o primeiro nome da pessoa de vez em quando, não em toda mensagem. No máximo um emoji, e só quando combinar.
+- Sempre chame a pessoa pelo primeiro nome (vem em "Primeiro nome" no contexto), em toda resposta, de forma natural ("Valeu, Carlos!", "Carlos, e o prazo?"). Nunca use sobrenome nem nome da empresa para chamar a pessoa. Se não houver primeiro nome, não invente. Quando for cumprimentar (primeira mensagem do dia ou da conversa), use sempre "Oi, Fulano!" com o primeiro nome, nunca "Olá, Sr." nem nome completo. No máximo um emoji, e só quando combinar.
 - Responda ao que a pessoa disse. Se ela puxou assunto (futebol, família, o tempo), responda com uma frase leve e volte ao assunto.
 - Mensagens de 1 a 3 frases. Nunca repita a lista inteira de itens se a pessoa já respondeu parte; pergunte só o que falta.
 
@@ -73,7 +75,7 @@ export async function conversarIA(p: {
 }): Promise<ResultadoIA> {
   const contexto = [
     `Hoje: ${p.hoje}. Você assina como: ${p.remetente}.`,
-    `Quem escreveu: ${p.papel}${p.nome ? `, ${p.nome}` : ""}${p.empresa ? ` (empresa ${p.empresa})` : ""}.`,
+    `Quem escreveu: ${p.papel}${p.nome ? `, ${p.nome}` : ""}${p.empresa ? ` (empresa ${p.empresa})` : ""}. Primeiro nome: ${primeiro(p.nome) || "(não sabemos)"}.`,
     p.itens.length
       ? `Cotação desta semana aberta. Itens que este fornecedor vende (itemId | nome | unidade no sistema | último preço):\n${p.itens.map((i) => `${i.id} | ${i.nome}${i.material ? ` (${i.material})` : ""} | ${i.unidade} | ${i.ultimoPreco != null ? `R$ ${i.ultimoPreco.toFixed(4)}` : "sem preço"}`).join("\n")}`
       : "Não há cotação aberta com esta pessoa. precos deve ficar vazio.",
@@ -117,7 +119,7 @@ const semAcento = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLo
 const PALAVRAS_FRACAS = new Set(["para", "com", "sem", "chapa", "barra", "peca", "tipo", "cor", "de", "da", "do"]);
 
 /** Procura o nome (ou o material) de cada item no texto e pega o primeiro valor em reais logo depois. */
-export function lerPrecosSimples(texto: string, itens: ItemCotado[], remetente = "Gleyson Couto"): ResultadoIA {
+export function lerPrecosSimples(texto: string, itens: ItemCotado[], remetente = "Gleyson Couto", nome?: string | null): ResultadoIA {
   const t = semAcento(texto);
   const precos: ResultadoIA["precos"] = [];
   const palavras = (it: ItemCotado) => [...new Set([it.material, ...it.nome.split(/[\s/()-]+/)].filter(Boolean).map((w) => semAcento(String(w))).filter((w) => w.length >= 4 && !PALAVRAS_FRACAS.has(w)))];
@@ -136,7 +138,8 @@ export function lerPrecosSimples(texto: string, itens: ItemCotado[], remetente =
     }
   }
   const perguntaRobo = /\b(robo|bot|maquina|inteligencia artificial|\bia\b|automatic[oa]|e gente|pessoa de verdade)\b/.test(t) && t.includes("?");
-  const base = precos.length ? "Anotado, muito obrigado! Qualquer novidade a gente te chama." : "Opa, recebido! Vou passar aqui para a equipe.";
+  const pn = primeiro(nome);
+  const base = precos.length ? `Anotado, ${pn ? `${pn}, ` : ""}muito obrigado! Qualquer novidade a gente te chama.` : `Opa${pn ? `, ${pn}` : ""}, recebido! Vou passar aqui para a equipe.`;
   return {
     precos,
     resposta: perguntaRobo ? `${base} E respondendo: quem responde aqui é o Sambot, o assistente automático do ${remetente}, e ele acompanha tudo por aqui.` : base,
