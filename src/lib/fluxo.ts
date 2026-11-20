@@ -5,6 +5,7 @@
 //   • o que sai do último passo entra no estoque da peça pronta.
 // O "estoque parcial" é o que saiu de um passo e ainda espera o próximo.
 import { db } from "./db";
+import { avisarDepois } from "./notificacoes";
 import { registrarApontamento, type ResultadoApontamento } from "./producao";
 import { num } from "./formato";
 
@@ -128,6 +129,12 @@ export async function lancarProducao(p: {
     await db.movimentoEstoque.create({ data: { ...m, motivo, usuario: p.usuario, apontamentoId: r.apontamentoId } });
   }
   await atualizarStatusLote(lote.id);
+  const func = await db.funcionario.findUnique({ where: { id: p.funcionarioId }, select: { nome: true } });
+  await avisarDepois("apontamento", {
+    titulo: "Produção lançada",
+    texto: `${func?.nome ?? "Operador"} · ${passo.item.nome} · ${passo.operacao.nome}: ${num(p.quantidade)} peça(s)${p.refugo ? `, ${num(p.refugo)} refugo` : ""} (lote ${lote.numero})`,
+    link: "/producao", tag: `apontamento-${r.apontamentoId}`,
+  });
   return { ...r, lote: lote.numero };
 }
 
@@ -141,7 +148,10 @@ export async function atualizarStatusLote(loteId: number) {
   const faltaPlanejado = s.planejado != null && primeiro && primeiro.id !== 0 && primeiro.feito + primeiro.refugo < s.planejado;
   const concluido = s.pronto > 0 && !andando && !parado && !faltaPlanejado;
   if (concluido !== (s.status === "concluido"))
-    await db.lote.update({ where: { id: loteId }, data: { status: concluido ? "concluido" : "aberto", concluidoEm: concluido ? new Date() : null } });
+  {
+    const l = await db.lote.update({ where: { id: loteId }, data: { status: concluido ? "concluido" : "aberto", concluidoEm: concluido ? new Date() : null }, include: { item: true } });
+    if (concluido) await avisarDepois("lote", { titulo: "Lote concluído", texto: `Lote ${l.numero} · ${l.item.nome}: ${num(s.pronto)} peça(s) prontas`, link: "/producao", tag: `lote-${l.id}` });
+  }
 }
 
 /** Liga o cronômetro: o colaborador começou um processo. */

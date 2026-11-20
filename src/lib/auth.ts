@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
+import { avisarDaAuditoria } from "./notificacoes";
 import { abaDoCaminho, abaLiberada, lerAbasLiberadas, lerPermissoes, limitarPermissoes, pode, type Acao, type Modulo } from "./permissoes";
 
 const COOKIE = "rga_sessao";
@@ -81,4 +82,5 @@ export async function exigir(modulo: Modulo, acao: Acao = "ver"): Promise<Usuari
 
 export async function auditar(usuario: string, acao: string, detalhe?: string) {
   await db.auditoria.create({ data: { usuario, acao, detalhe } });
+  await avisarDaAuditoria(usuario, acao, detalhe);
 }

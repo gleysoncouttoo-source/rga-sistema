@@ -9,6 +9,7 @@ import { db } from "./db";
 import { chave, dia, diaUtilAnterior, diasEntre, menosDiasUteis, proximoDiaUtil, somaDias } from "./datas";
 import { dataCurta, dataDia } from "./formato";
 import { registrarPreco } from "./precos";
+import { avisar, avisarDaAuditoria } from "./notificacoes";
 
 type Tx = Prisma.TransactionClient;
 
@@ -262,8 +263,32 @@ export async function criarPedidoVenda(p: {
       itens: { create: p.itens.map((i) => ({ itemId: i.itemId, quantidade: i.quantidade, precoUnitario: i.precoUnitario ?? null })) },
     },
   });
-  await analisarPedido(pv.id, usuario);
+  const an = await analisarPedido(pv.id, usuario);
+  await avisarPedidoNovo(pv.id, p, an?.situacao, an?.compras.length ?? 0);
   return pv.id;
+}
+
+/** Avisos no celular: venda que chegou sozinha (Shopee/site) e compras que o sistema lançou para ela. */
+async function avisarPedidoNovo(id: number, p: { cliente: string; numero?: string; origem?: string; itens: { quantidade: number; precoUnitario?: number | null }[] }, situacao: string | undefined, compras: number) {
+  const origem = p.origem ?? "manual";
+  if (origem !== "manual") {
+    const pecas = p.itens.reduce((s, i) => s + i.quantidade, 0);
+    const valor = p.itens.reduce((s, i) => s + i.quantidade * (i.precoUnitario ?? 0), 0);
+    const onde = origem === "shopee" ? "Shopee" : origem === "site" ? "site" : origem;
+    const sit = situacao === "pronto" ? "tem no estoque" : situacao === "produzir" ? "precisa produzir" : situacao ? "precisa comprar material" : "";
+    await avisar("venda", {
+      titulo: `Nova venda · ${onde}`,
+      texto: `${p.cliente.replace(/^Shopee · /, "")}: ${fmt(pecas)} peça(s)${valor ? ` · ${valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}` : ""}${sit ? ` · ${sit}` : ""}`,
+      link: `/vendas/${id}`, tag: `venda-${id}`,
+    });
+  }
+  if (compras > 0) {
+    await avisar("compra", {
+      titulo: situacao === "urgente" ? "Compra URGENTE para aprovar" : "Compra para aprovar",
+      texto: `A venda #${id}${p.numero ? ` (${p.numero})` : ""} precisa de material: ${compras} pedido(s) de compra lançado(s).`,
+      link: "/compras", tag: `compra-${id}`,
+    });
+  }
 }
 
 export async function entregarPedido(id: number, usuario: string) {
@@ -279,6 +304,7 @@ export async function entregarPedido(id: number, usuario: string) {
     await tx.pedidoCompra.deleteMany({ where: { pedidoVendaId: id, status: "sugerido" } });
     await tx.pedidoVenda.update({ where: { id }, data: { status: "entregue" } });
     await tx.auditoria.create({ data: { usuario, acao: "entregou pedido de venda", detalhe: `#${id}` } });
+    await avisarDaAuditoria(usuario, "entregou pedido de venda", `#${id}`);
   });
 }
 
@@ -288,6 +314,7 @@ export async function cancelarPedido(id: number, usuario: string) {
     await tx.pedidoCompra.deleteMany({ where: { pedidoVendaId: id, status: "sugerido" } });
     await tx.pedidoVenda.update({ where: { id }, data: { status: "cancelado" } });
     await tx.auditoria.create({ data: { usuario, acao: "cancelou pedido de venda", detalhe: `#${id}` } });
+    await avisarDaAuditoria(usuario, "cancelou pedido de venda", `#${id}`);
   });
 }
 
@@ -338,6 +365,7 @@ export async function reprogramarCompra(id: number, p: { fornecedorId?: number |
     });
     await lancarBoletos(tx, id, novoF, forn?.nome ?? "fornecedor a definir", esc.vencimentos, await valorCompra(tx, id), pc.status === "aprovado" ? "aberto" : "previsto");
     await tx.auditoria.create({ data: { usuario, acao: "reprogramou compra", detalhe: `#${id} para ${dataDia(esc.data)}` } });
+    await avisarDaAuditoria(usuario, "reprogramou compra", `#${id} para ${dataDia(esc.data)}`);
   });
 }
 
@@ -349,6 +377,7 @@ export async function aprovarCompra(id: number, usuario: string) {
     await tx.pedidoCompra.update({ where: { id }, data: { status: "aprovado", decididoPor: usuario } });
     await tx.contaPagar.updateMany({ where: { pedidoCompraId: id, status: "previsto" }, data: { status: "aberto" } });
     await tx.auditoria.create({ data: { usuario, acao: "aprovou compra", detalhe: `#${id}` } });
+    await avisarDaAuditoria(usuario, "aprovou compra", `#${id}`);
   });
 }
 
@@ -357,6 +386,7 @@ export async function cancelarCompra(id: number, usuario: string) {
     await tx.pedidoCompra.update({ where: { id }, data: { status: "cancelado", decididoPor: usuario } });
     await tx.contaPagar.deleteMany({ where: { pedidoCompraId: id, status: { not: "pago" } } });
     await tx.auditoria.create({ data: { usuario, acao: "cancelou compra", detalhe: `#${id}` } });
+    await avisarDaAuditoria(usuario, "cancelou compra", `#${id}`);
   });
 }
 
@@ -404,6 +434,7 @@ export async function receberCompra(id: number, usuario: string, r: {
       data: { status: "recebido", recebidoEm: quando, notaFiscal: r.notaFiscal || null, obsRecebimento: [parcial ? "Recebido com quantidade menor que a pedida." : "", r.obs ?? ""].filter(Boolean).join(" ") || null },
     });
     await tx.auditoria.create({ data: { usuario, acao: "recebeu compra", detalhe: `#${id}${recordes.length ? ` — recorde de preço: ${recordes.join(", ")}` : ""}` } });
+    await avisarDaAuditoria(usuario, "recebeu compra", `#${id}${recordes.length ? ` — recorde de preço: ${recordes.join(", ")}` : ""}`);
     return { recordes };
   });
 }
