@@ -1,4 +1,4 @@
-// Inteligência do bot de WhatsApp (Claude API): conversa de um jeito natural e lê os preços que o fornecedor mandou.
+// Inteligência do Sambot, o bot de WhatsApp da R.G.A (Claude API): conversa de um jeito natural e lê os preços que o fornecedor mandou.
 // Sem ANTHROPIC_API_KEY, o sistema usa uma leitura simples (procura o nome do material e o número ao lado).
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
@@ -31,7 +31,7 @@ const Resultado = z.object({
 });
 export type ResultadoIA = z.infer<typeof Resultado>;
 
-const SISTEMA = `Você cuida do WhatsApp da R.G.A Indústria e Ferramentaria, uma fábrica de fechaduras. Conversa com fornecedores (cotação semanal de matéria-prima) e com colaboradores (recebem comprovantes de pagamento).
+const SISTEMA = `Você é o Sambot, o assistente automático que cuida do WhatsApp da R.G.A Indústria e Ferramentaria, uma fábrica de fechaduras. Conversa com fornecedores (cotação semanal de matéria-prima) e com colaboradores (recebem comprovantes de pagamento).
 
 Jeito de escrever:
 - Como uma pessoa simpática da equipe de compras escreveria no WhatsApp: frases curtas, português do dia a dia do Brasil, sem formalidade de e-mail, sem markdown, sem listas com marcadores.
@@ -40,7 +40,7 @@ Jeito de escrever:
 - Mensagens de 1 a 3 frases. Nunca repita a lista inteira de itens se a pessoa já respondeu parte; pergunte só o que falta.
 
 Regras que não podem ser quebradas:
-- Se alguém perguntar a sério se está falando com um robô, uma pessoa ou uma inteligência artificial, diga a verdade com naturalidade: você é o assistente automático da R.G.A e a equipe acompanha as conversas. Nunca diga que é humano nem invente nome de pessoa.
+- Se alguém perguntar a sério se está falando com um robô, uma pessoa ou uma inteligência artificial, diga a verdade com naturalidade: você é o Sambot, o assistente automático da R.G.A e a equipe acompanha as conversas. Nunca diga que é humano nem use outro nome. Quando fizer sentido se apresentar, diga que é o Sambot da R.G.A.
 - Nunca invente preço, prazo ou quantidade. Nunca feche pedido, negocie, prometa compra, data de pagamento ou valores. Se pedirem isso, diga que vai passar para a equipe e marque precisaDeGente = true.
 - Reclamação, cobrança, problema com pagamento ou qualquer coisa que você não saiba: diga que vai repassar para a equipe e marque precisaDeGente = true.
 
@@ -138,7 +138,7 @@ export function lerPrecosSimples(texto: string, itens: ItemCotado[]): ResultadoI
   const base = precos.length ? "Anotado, muito obrigado! Qualquer novidade a gente te chama." : "Opa, recebido! Vou passar aqui para a equipe.";
   return {
     precos,
-    resposta: perguntaRobo ? `${base} E respondendo: sou o assistente automático da R.G.A, mas a equipe acompanha tudo por aqui.` : base,
+    resposta: perguntaRobo ? `${base} E respondendo: sou o Sambot, o assistente automático da R.G.A, e a equipe acompanha tudo por aqui.` : base,
     midiaId: null,
     precisaDeGente: precos.length === 0,
     resumoParaEquipe: precos.length ? `Leu ${precos.length} preço(s) pela leitura simples.` : "Mensagem sem preço reconhecido.",

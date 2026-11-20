@@ -15,7 +15,7 @@ const USOS: Record<string, string> = {
   primeira_resposta: "Quando o fornecedor responde a cotação pela primeira vez (cumprimentar)",
   agradecer: "Depois que o fornecedor manda os preços (agradecer)",
   comprovante: "Quando alguém responde o comprovante de pagamento",
-  livre: "O bot escolhe quando combinar",
+  livre: "O Sambot escolhe quando combinar",
 };
 
 const ir = (url: string, tipo: "ok" | "erro", msg: string) => redirect(`${url}${url.includes("?") ? "&" : "?"}${tipo}=${encodeURIComponent(msg)}`);
@@ -35,7 +35,7 @@ async function acao(form: FormData) {
     await db.whatsMidia.create({ data: { tipo, nome: nome.slice(0, 80), uso: USOS[uso] ? uso : "livre", descricao: String(form.get("descricao") || "").trim().slice(0, 300) || null, mime: String(form.get("arqMime") || m![1]), tamanho: dados.length, dados, usuario: u.nome } });
     await auditar(u.nome, `adicionou ${tipo === "audio" ? "áudio" : "figurinha"} do WhatsApp`, nome);
     revalidatePath("/compras/whatsapp");
-    ir(volta, "ok", `${tipo === "audio" ? "Áudio" : "Figurinha"} guardado. O bot já pode usar.`);
+    ir(volta, "ok", `${tipo === "audio" ? "Áudio" : "Figurinha"} guardado. O Sambot já pode usar.`);
   }
   if (a === "midia-editar") {
     const uso = String(form.get("uso"));
@@ -89,8 +89,8 @@ export default async function WhatsApp({ searchParams }: { searchParams: Promise
       {sp.erro && <div className="aviso erro">{sp.erro}</div>}
       {sp.ok && <div className="aviso ok">{sp.ok}</div>}
       <p className="suave">
-        Todas as conversas do WhatsApp da R.G.A: cotações com fornecedores e comprovantes para fornecedores e colaboradores. O bot escreve como gente, entende áudio, foto e PDF, e pode mandar seus áudios gravados e figurinhas.
-        Se alguém perguntar a sério se é robô, ele diz que é o assistente automático da R.G.A.
+        Todas as conversas do WhatsApp da R.G.A: cotações com fornecedores e comprovantes para fornecedores e colaboradores. O Sambot escreve como gente, entende áudio, foto e PDF, e pode mandar seus áudios gravados e figurinhas.
+        Se alguém perguntar a sério se é robô, ele diz que é o Sambot, o assistente automático da R.G.A.
       </p>
       <div className="grade">
         <div className="kpi"><div className="suave">WhatsApp</div><div className="v" style={{ fontSize: "1.2rem" }}>{whatsLigado() ? "Ligado" : "Esperando o chip"}</div><div className="r">{status.filter((s) => s.ok).length} de {status.length} itens prontos</div></div>
@@ -102,7 +102,7 @@ export default async function WhatsApp({ searchParams }: { searchParams: Promise
       <h2 id="conversa">Conversas</h2>
       <div className="card" style={{ display: "grid", gridTemplateColumns: "minmax(200px, 280px) 1fr", gap: 14 }}>
         <div className="contatos">
-          {contatos.size === 0 && <p className="suave">Nenhuma conversa ainda. Teste o bot logo abaixo.</p>}
+          {contatos.size === 0 && <p className="suave">Nenhuma conversa ainda. Teste o Sambot logo abaixo.</p>}
           {[...contatos.values()].map((m) => (
             <a key={m.telefone} href={`/compras/whatsapp?tel=${m.telefone}#conversa`} className={m.telefone === tel ? "ativo" : ""}>
               <span><b>{nomeDe(m.telefone)}</b><br /><span className="suave" style={{ fontSize: ".82rem" }}>{m.direcao === "saida" ? "Você: " : ""}{m.texto.slice(0, 38)}{m.texto.length > 38 ? "…" : ""}</span></span>
@@ -123,8 +123,8 @@ export default async function WhatsApp({ searchParams }: { searchParams: Promise
 
       {edita && (
         <div className="card">
-          <b>Testar o bot</b>
-          <p className="suave" style={{ margin: "4px 0 12px" }}>Escreva como se fosse o fornecedor ou o colaborador e veja o que o bot responderia. Nada é mandado no WhatsApp. Se for um fornecedor com cotação aberta, os preços lidos vão para “a conferir”.</p>
+          <b>Testar o Sambot</b>
+          <p className="suave" style={{ margin: "4px 0 12px" }}>Escreva como se fosse o fornecedor ou o colaborador e veja o que o Sambot responderia. Nada é mandado no WhatsApp. Se for um fornecedor com cotação aberta, os preços lidos vão para “a conferir”.</p>
           <form action={acao} className="campos">
             <input type="hidden" name="a" value="testar" /><input type="hidden" name="volta" value={volta} />
             <label>Quem está escrevendo
@@ -135,13 +135,13 @@ export default async function WhatsApp({ searchParams }: { searchParams: Promise
               </select>
             </label>
             <label className="inteiro">Mensagem<textarea name="texto" rows={3} placeholder="Ex.: bom dia! o zamac ta 18,50 o kg, entrego em 5 dias. vc é robô?" style={{ paddingTop: 10 }} required /></label>
-            <div className="inteiro"><button className="btn">Ver resposta do bot</button></div>
+            <div className="inteiro"><button className="btn">Ver resposta do Sambot</button></div>
           </form>
         </div>
       )}
 
       <h2 id="biblioteca">Seus áudios e figurinhas</h2>
-      <p className="suave">O bot escolhe um destes quando a situação combinar com o “quando usar” e com a descrição. Ele nunca manda mais de um por mensagem e não repete na mesma conversa. Áudio em <b>.ogg</b> ou <b>.opus</b> chega como mensagem de voz; <b>.mp3</b> e <b>.m4a</b> chegam como arquivo de áudio.</p>
+      <p className="suave">O Sambot escolhe um destes quando a situação combinar com o “quando usar” e com a descrição. Ele nunca manda mais de um por mensagem e não repete na mesma conversa. Áudio em <b>.ogg</b> ou <b>.opus</b> chega como mensagem de voz; <b>.mp3</b> e <b>.m4a</b> chegam como arquivo de áudio.</p>
       <div className="card tabela">
         <table>
           <thead><tr><th>Áudio / figurinha</th><th>Quando usar</th><th>O que diz / mostra</th><th className="n">Usado</th>{edita && <th></th>}</tr></thead>

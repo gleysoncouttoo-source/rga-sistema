@@ -29,7 +29,7 @@ async function acao(form: FormData) {
     await auditar(u.nome, "alterou cotação automática", vezes === "0" ? "desligada" : `${vezes}x por mês, ${DIAS_SEMANA[Number(diaSemana)]}`);
     revalidatePath("/compras/cotacao");
     const prox = proximasCotacoes({ vezes: Number(vezes) as 0 | 1 | 2 | 4, diaSemana: Number(diaSemana) }, 1)[0];
-    ir("ok", vezes === "0" ? "Cotação automática desligada. Você ainda pode mandar pelo botão quando quiser." : `Pronto: ${vezes === "4" ? "toda semana" : `${vezes}x por mês`}, ${DIAS_SEMANA[Number(diaSemana)]} às 8h. Próxima: ${prox ? dataDia(prox) : "—"}. Dois dias depois o bot lembra quem não respondeu.`);
+    ir("ok", vezes === "0" ? "Cotação automática desligada. Você ainda pode mandar pelo botão quando quiser." : `Pronto: ${vezes === "4" ? "toda semana" : `${vezes}x por mês`}, ${DIAS_SEMANA[Number(diaSemana)]} às 8h. Próxima: ${prox ? dataDia(prox) : "—"}. Dois dias depois o Sambot lembra quem não respondeu.`);
   }
   if (a === "reenviar") {
     const ok = await enviarPedido(Number(form.get("cf")));
@@ -116,13 +116,13 @@ export default async function Cotacao({ searchParams }: { searchParams: Promise<
       {sp.ok && <div className="aviso ok">{sp.ok}</div>}
 
       <p className="suave">
-        Nos dias que você escolher (até toda semana), o bot pergunta no WhatsApp o preço do que cada fornecedor vende. Ele conversa como gente, entende áudio, foto e PDF de tabela, e anota os preços aqui como <b>a conferir</b>.
+        Nos dias que você escolher (até toda semana), o Sambot pergunta no WhatsApp o preço do que cada fornecedor vende. Ele conversa como gente, entende áudio, foto e PDF de tabela, e anota os preços aqui como <b>a conferir</b>.
         Você confirma com um toque e o preço entra no sistema: na aba do fornecedor e, quando ele é o fornecedor principal do item, no histórico de 30/60/90 dias em Preços.
       </p>
 
       {!tudoLigado && (
         <div className="card" style={{ borderLeft: "4px solid var(--acento)" }}>
-          <b>O que falta para o bot mandar e responder sozinho</b>
+          <b>O que falta para o Sambot mandar e responder sozinho</b>
           <ul style={{ margin: "10px 0 6px", paddingLeft: 20, lineHeight: 1.8 }}>
             {status.map((s) => <li key={s.nome}>{s.ok ? "✅" : "⬜"} {s.nome}</li>)}
           </ul>
@@ -158,7 +158,7 @@ export default async function Cotacao({ searchParams }: { searchParams: Promise<
             </form>
           </div>
           <p className="suave" style={{ margin: "10px 0 0" }}>
-            {auto.vezes ? <>Próximas cotações às 8h: <b>{proximasCotacoes(auto).map((d) => dataDia(d)).join(", ")}</b>. Dois dias depois, o bot lembra uma vez quem não respondeu.{!whatsLigado() && " (Começa a mandar sozinho quando o WhatsApp for ligado.)"}</> : "Sem cotação automática. Use o botão sempre que quiser atualizar os preços."}
+            {auto.vezes ? <>Próximas cotações às 8h: <b>{proximasCotacoes(auto).map((d) => dataDia(d)).join(", ")}</b>. Dois dias depois, o Sambot lembra uma vez quem não respondeu.{!whatsLigado() && " (Começa a mandar sozinho quando o WhatsApp for ligado.)"}</> : "Sem cotação automática. Use o botão sempre que quiser atualizar os preços."}
           </p>
           {exemplo && (
             <details style={{ marginTop: 12 }}>

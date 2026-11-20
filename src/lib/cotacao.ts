@@ -55,7 +55,7 @@ export function proximasCotacoes(c: ConfigAuto, quantas = 3) {
 }
 
 export const textoPedidoCotacao = (nome: string, itens: ItemCotado[]) =>
-  `Oi${nome ? `, ${nome}` : ""}! Tudo bem? Aqui é da R.G.A. Estamos fechando as compras da semana. Pode me passar o preço atual de: ${listaItens(itens)}? Se puder, manda também o prazo de entrega. Obrigado!`;
+  `Oi${nome ? `, ${nome}` : ""}! Tudo bem? Aqui é o Sambot, da R.G.A. Estamos fechando as compras da semana. Pode me passar o preço atual de: ${listaItens(itens)}? Se puder, manda também o prazo de entrega. Obrigado!`;
 
 /** Abre (ou reabre) a cotação da semana e manda o pedido para quem ainda não recebeu. */
 export async function abrirCotacao(usuario: string) {
@@ -104,7 +104,7 @@ type Entrada = { telefone: string; nomePerfil?: string | null; texto: string; wa
 
 /**
  * Mensagem que chegou no WhatsApp (ou que alguém digitou na tela, quando o fornecedor respondeu por outro lugar).
- * responder = false: só lê os preços e guarda a resposta que o bot daria, sem mandar.
+ * responder = false: só lê os preços e guarda a resposta que o Sambot daria, sem mandar.
  */
 export async function receberMensagem(m: Entrada, opcoes: { responder: boolean; fornecedorId?: number } = { responder: true }) {
   if (m.waId && (await db.whatsMensagem.findUnique({ where: { waId: m.waId } }))) return null; // já processada
