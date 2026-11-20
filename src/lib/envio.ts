@@ -2,6 +2,7 @@
 // Sem as chaves configuradas, a tela oferece os botões manuais (abrir o WhatsApp ou o e-mail com a mensagem pronta).
 import "server-only";
 import { brl, dataDia } from "./formato";
+import { guardarMensagem } from "./whatsapp";
 
 export function configEnvio() {
   return {
@@ -12,20 +13,23 @@ export function configEnvio() {
 
 type ContaTexto = { descricao: string; formaPagamento: string | null; parcela: string | null; notaFiscal: string | null; valor: number; pagoEm: Date | null; pedidoCompra?: { notaFiscal: string | null } | null };
 
-/** "Comprovante de pagamento boleto 3/4 referente à nota 022552 — R$ 1.290,50, pago em 18/11/2026." */
-export function textoComprovante(c: ContaTexto) {
+const referencia = (c: ContaTexto) => {
   const nota = c.notaFiscal ?? c.pedidoCompra?.notaFiscal;
   const oque = [c.formaPagamento, c.parcela].filter(Boolean).join(" ");
   const ref = nota ? `referente à nota ${nota}` : `referente a ${c.descricao.replace(/^Salário — /, "salário de ")}`;
-  return `Comprovante de pagamento${oque ? " " + oque : ""} ${ref} — ${brl(c.valor)}${c.pagoEm ? `, pago em ${dataDia(c.pagoEm)}` : ""}. R.G.A Indústria e Ferramentaria.`;
+  return `${oque ? oque + " " : ""}${ref}`;
+};
+
+/** Assunto do e-mail: "Comprovante de pagamento boleto 3/4 referente à nota 022552" */
+export const assuntoComprovante = (c: ContaTexto) => `Comprovante de pagamento ${referencia(c)}`;
+
+/** "Olá, Carlos! Aqui é da R.G.A. Segue o comprovante do pagamento boleto 3/4 referente à nota 022552, no valor de R$ 1.290,50, pago em 18/11/2026. Qualquer dúvida é só chamar." */
+export function textoComprovante(c: ContaTexto, nome?: string | null) {
+  const primeiro = String(nome ?? "").trim().split(/\s+/)[0];
+  return `Olá${primeiro ? `, ${primeiro}` : ""}! Aqui é da R.G.A. Segue o comprovante do pagamento ${referencia(c)}, no valor de ${brl(c.valor)}${c.pagoEm ? `, pago em ${dataDia(c.pagoEm)}` : ""}. Qualquer dúvida é só chamar.`;
 }
 
-/** Só números, com 55 na frente (celular brasileiro). */
-export function numeroWhats(t: string | null | undefined) {
-  const d = String(t ?? "").replace(/\D/g, "");
-  if (d.length < 10) return null;
-  return d.startsWith("55") && d.length >= 12 ? d : "55" + d;
-}
+export { numeroWhats } from "./whatsapp";
 
 type Anexo = { nome: string; tipo: string; dados: Uint8Array };
 
@@ -46,7 +50,7 @@ export async function enviarEmail(para: string, assunto: string, texto: string, 
  * Mensagem que a empresa começa precisa de um modelo aprovado pela Meta (WHATSAPP_TEMPLATE, com cabeçalho de documento
  * e um campo de texto no corpo); sem modelo, só entrega se a pessoa falou com a empresa nas últimas 24 horas.
  */
-export async function enviarWhats(numero: string, texto: string, anexo: Anexo) {
+export async function enviarWhats(numero: string, texto: string, anexo: Anexo, quem: { fornecedorId?: number | null; funcionarioId?: number | null; nome?: string | null } = {}) {
   const base = `https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_ID}`;
   const auth = { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` };
   const fd = new FormData();
@@ -69,4 +73,6 @@ export async function enviarWhats(numero: string, texto: string, anexo: Anexo) {
     body: JSON.stringify({ messaging_product: "whatsapp", to: numero, ...msg }),
   });
   if (!r.ok) throw new Error(`WhatsApp não foi: ${(await r.text()).slice(0, 200)}`);
+  const j = (await r.json().catch(() => ({}))) as { messages?: { id: string }[] };
+  await guardarMensagem({ ...quem, telefone: numero, direcao: "saida", tipo: "documento", texto: `📎 ${anexo.nome} — ${texto}`, waId: j.messages?.[0]?.id ?? null, status: "enviada" });
 }

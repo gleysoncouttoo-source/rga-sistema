@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { auditar, exigir } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { BANCOS, CATEGORIAS } from "@/lib/financeiro";
-import { configEnvio, enviarEmail, enviarWhats, numeroWhats, textoComprovante } from "@/lib/envio";
+import { configEnvio, enviarEmail, enviarWhats, numeroWhats, textoComprovante, assuntoComprovante } from "@/lib/envio";
 import { brl, dataDia } from "@/lib/formato";
 import { chave, dia, somaDias } from "@/lib/datas";
 import AbasFinanceiro from "@/components/AbasFinanceiro";
@@ -28,9 +28,10 @@ async function origem() {
 }
 
 /** E-mail e WhatsApp de quem recebeu, pelo cadastro do colaborador ou do fornecedor. */
-const contato = (c: { funcionario: { email: string | null; telefone: string | null } | null; fornecedor: { email: string | null; telefone: string | null } | null }) => {
-  const p = c.funcionario ?? c.fornecedor;
-  return { email: p?.email || null, whats: p?.telefone || null };
+const contato = (c: { funcionario: { email: string | null; telefone: string | null; nome: string } | null; fornecedor: { email: string | null; telefone: string | null; whatsapp: string | null; contato: string | null; nome: string } | null }) => {
+  if (c.funcionario) return { email: c.funcionario.email || null, whats: c.funcionario.telefone || null, nome: c.funcionario.nome };
+  const f = c.fornecedor;
+  return { email: f?.email || null, whats: f?.whatsapp || f?.telefone || null, nome: f?.contato || null };
 };
 
 async function anexar(form: FormData) {
@@ -89,15 +90,15 @@ async function acao(form: FormData) {
   const c = await db.contaPagar.findUniqueOrThrow({ where: { id }, include: { fornecedor: true, funcionario: true, pedidoCompra: { select: { notaFiscal: true } }, comprovantes: true } });
   const arq = c.comprovantes[0];
   if (!arq) redirect(aviso(url, "erro", "Anexe o comprovante antes de enviar.") + `#p${id}`);
-  const { email, whats } = contato(c), cfg = configEnvio();
-  const texto = textoComprovante(c), anexo = { nome: arq.nome, tipo: arq.tipo, dados: arq.dados };
+  const { email, whats, nome } = contato(c), cfg = configEnvio();
+  const texto = textoComprovante(c, nome), anexo = { nome: arq.nome, tipo: arq.tipo, dados: arq.dados };
   const foi: string[] = [], falhou: string[] = [];
   if (email && cfg.email) {
-    try { await enviarEmail(email, texto.split(" — ")[0], texto, anexo); foi.push(email); } catch (e) { falhou.push(e instanceof Error ? e.message : "e-mail"); }
+    try { await enviarEmail(email, assuntoComprovante(c), texto, anexo); foi.push(email); } catch (e) { falhou.push(e instanceof Error ? e.message : "e-mail"); }
   }
   const n = numeroWhats(whats);
   if (n && cfg.whats) {
-    try { await enviarWhats(n, texto, anexo); foi.push(`WhatsApp ${whats}`); } catch (e) { falhou.push(e instanceof Error ? e.message : "WhatsApp"); }
+    try { await enviarWhats(n, texto, anexo, { fornecedorId: c.fornecedorId, funcionarioId: c.funcionarioId, nome: nome ?? c.favorecido }); foi.push(`WhatsApp ${whats}`); } catch (e) { falhou.push(e instanceof Error ? e.message : "WhatsApp"); }
   }
   if (foi.length) {
     await db.comprovante.update({ where: { id: arq.id }, data: { enviadoEm: new Date(), enviadoPara: foi.join(" e ") } });
@@ -214,9 +215,9 @@ export default async function HistoricoPagamentos({ searchParams }: { searchPara
             <tbody>{cs.map((c) => {
               const quem = c.funcionario?.nome ?? c.fornecedor?.nome ?? c.favorecido ?? null;
               const nota = c.notaFiscal ?? c.pedidoCompra?.notaFiscal;
-              const { email, whats } = contato(c);
+              const { email, whats, nome } = contato(c);
               const comp = c.comprovantes[0];
-              const texto = textoComprovante(c), link = comp ? `${base}/api/comprovante/${comp.token}` : "", nW = numeroWhats(whats);
+              const texto = textoComprovante(c, nome), link = comp ? `${base}/api/comprovante/${comp.token}` : "", nW = numeroWhats(whats);
               return (
                 <tr key={c.id} id={`p${c.id}`} className={String(c.id) === sp.id ? "marcado" : undefined}>
                   <td className="data">{dataDia(dia(c.pagoEm!))}</td>
@@ -237,7 +238,7 @@ export default async function HistoricoPagamentos({ searchParams }: { searchPara
                     {comp && (
                       <div className="suave pq" style={{ marginTop: 4 }}>
                         {comp.enviadoEm ? <>✓ enviado {dataDia(dia(comp.enviadoEm))} para {comp.enviadoPara}</> : email || whats ? <>vai para {[email, whats].filter(Boolean).join(" e ")}</> : <>✓ guardado (sem contato para enviar)</>}
-                        {!automatico && (email || nW) && <> · enviar à mão: {email && <a href={`mailto:${email}?subject=${encodeURIComponent(texto.split(" — ")[0])}&body=${encodeURIComponent(`${texto}\n\n${link}`)}`}>e-mail</a>}{email && nW && " / "}{nW && <a target="_blank" rel="noreferrer" href={`https://wa.me/${nW}?text=${encodeURIComponent(`${texto}\n${link}`)}`}>WhatsApp</a>}</>}
+                        {!automatico && (email || nW) && <> · enviar à mão: {email && <a href={`mailto:${email}?subject=${encodeURIComponent(assuntoComprovante(c))}&body=${encodeURIComponent(`${texto}\n\n${link}`)}`}>e-mail</a>}{email && nW && " / "}{nW && <a target="_blank" rel="noreferrer" href={`https://wa.me/${nW}?text=${encodeURIComponent(`${texto}\n${link}`)}`}>WhatsApp</a>}</>}
                         {edita && <> · <form action={acao} className="inline"><H n="id" v={String(c.id)} /><H n="a" v="tirar" /><H n="voltar" v={url} /><button className="link">trocar</button></form></>}
                       </div>
                     )}

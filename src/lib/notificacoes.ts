@@ -21,6 +21,8 @@ export const TIPOS_AVISO = [
   { id: "venda-status", nome: "Venda entregue, cancelada ou excluída", aba: "vendas", padrao: false },
   { id: "compra", nome: "Compra lançada pelo sistema (falta material)", aba: "compras", padrao: true },
   { id: "compra-status", nome: "Compra aprovada, recebida, cancelada ou remarcada", aba: "compras", padrao: true },
+  { id: "cotacao", nome: "Fornecedor respondeu a cotação (preço para conferir)", aba: "compras", padrao: true },
+  { id: "whatsapp", nome: "Mensagem no WhatsApp da R.G.A que precisa de alguém", aba: "compras", padrao: true },
   { id: "contas", nome: "Contas a pagar hoje e vencidas (todo dia de manhã)", aba: "financeiro", padrao: true },
   { id: "pagamentos", nome: "Pagamento ou recebimento lançado", aba: "financeiro", padrao: false },
   { id: "preco", nome: "Preço de compra subiu", aba: "custos", padrao: true },

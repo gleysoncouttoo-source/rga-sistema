@@ -222,6 +222,7 @@ model Item {
   apontamentos   Apontamento[]
   processos      ProcessoProducao[]
   ofertas        FornecedorItem[]
+  cotacoesPreco  CotacaoPreco[]
   criadoEm       DateTime           @default(now())
 }
 
@@ -292,6 +293,7 @@ model Fornecedor {
   precos            PrecoHistorico[]
   boletos           ContaPagar[]
   ofertas           FornecedorItem[]
+  cotacoes          CotacaoFornecedor[]
   criadoEm          DateTime         @default(now())
 }
 
@@ -727,4 +729,91 @@ model Alteracao {
 
   @@index([tabela, registroId])
   @@index([criadoEm])
+}
+
+// ───────────── WhatsApp e cotação semanal ─────────────
+
+// Cotação de preços da semana: o bot pergunta a cada fornecedor o preço do que ele vende (toda segunda ou pelo botão).
+model Cotacao {
+  id           Int                 @id @default(autoincrement())
+  semana       DateTime            @unique // segunda-feira da semana (meio-dia UTC)
+  criadaPor    String?
+  fornecedores CotacaoFornecedor[]
+  criadoEm     DateTime            @default(now())
+}
+
+// Um fornecedor dentro da cotação da semana
+model CotacaoFornecedor {
+  id           Int            @id @default(autoincrement())
+  cotacaoId    Int
+  cotacao      Cotacao        @relation(fields: [cotacaoId], references: [id], onDelete: Cascade)
+  fornecedorId Int
+  fornecedor   Fornecedor     @relation(fields: [fornecedorId], references: [id], onDelete: Cascade)
+  // pronto (WhatsApp ainda não ligado), enviado, respondeu, completo, sem_whats, erro
+  status       String         @default("pronto")
+  enviadoEm    DateTime?
+  lembradoEm   DateTime?
+  respondidoEm DateTime?
+  erro         String?
+  precos       CotacaoPreco[]
+  criadoEm     DateTime       @default(now())
+
+  @@unique([cotacaoId, fornecedorId])
+}
+
+// Preço que o fornecedor respondeu. Fica "a conferir" até alguém confirmar; aí entra no sistema.
+model CotacaoPreco {
+  id                  Int               @id @default(autoincrement())
+  cotacaoFornecedorId Int
+  cotacaoFornecedor   CotacaoFornecedor @relation(fields: [cotacaoFornecedorId], references: [id], onDelete: Cascade)
+  itemId              Int
+  item                Item              @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  preco               Float // R$ por unidade do item no sistema (já convertido)
+  precoInformado      String? // como o fornecedor escreveu: "18,50 o quilo"
+  prazoEntregaDias    Int?
+  compraMinima        Float?
+  observacao          String?
+  textoOriginal       String?
+  status              String            @default("a_conferir") // a_conferir, confirmado, descartado
+  decididoPor         String?
+  decididoEm          DateTime?
+  criadoEm            DateTime          @default(now())
+
+  @@index([status])
+}
+
+// Cada mensagem que entrou ou saiu pelo WhatsApp da R.G.A
+model WhatsMensagem {
+  id            Int      @id @default(autoincrement())
+  telefone      String // só números, com 55
+  nome          String?
+  direcao       String // entrada, saida
+  tipo          String   @default("texto") // texto, documento, modelo
+  texto         String
+  fornecedorId  Int?
+  funcionarioId Int?
+  waId          String?  @unique // id da mensagem no WhatsApp (evita processar duas vezes)
+  status        String? // enviada, entregue, lida, erro, simulada
+  criadoEm      DateTime @default(now())
+
+  @@index([telefone, criadoEm])
+  @@index([fornecedorId, criadoEm])
+}
+
+// Áudios gravados pelo gleyson e figurinhas que o bot pode mandar. "uso" diz quando cada um combina.
+model WhatsMidia {
+  id        Int       @id @default(autoincrement())
+  tipo      String // audio, figurinha
+  nome      String
+  uso       String    @default("livre") // primeira_resposta, agradecer, comprovante, livre
+  descricao String? // o que o áudio fala / o que a figurinha mostra (o bot usa para escolher)
+  mime      String
+  tamanho   Int
+  dados     Bytes
+  ativo     Boolean   @default(true)
+  vezes     Int       @default(0)
+  waMediaId String? // arquivo já enviado para o WhatsApp (vale 30 dias)
+  waMediaEm DateTime?
+  usuario   String?
+  criadoEm  DateTime  @default(now())
 }
