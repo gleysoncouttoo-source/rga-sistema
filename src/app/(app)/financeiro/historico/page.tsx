@@ -9,6 +9,7 @@ import { auditar, exigir } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { BANCOS, CATEGORIAS } from "@/lib/financeiro";
 import { configEnvio, enviarEmail, enviarWhats, numeroWhats, textoComprovante, assuntoComprovante } from "@/lib/envio";
+import { nomeRemetente } from "@/lib/whatsapp";
 import { brl, dataDia } from "@/lib/formato";
 import { chave, dia, somaDias } from "@/lib/datas";
 import AbasFinanceiro from "@/components/AbasFinanceiro";
@@ -91,7 +92,7 @@ async function acao(form: FormData) {
   const arq = c.comprovantes[0];
   if (!arq) redirect(aviso(url, "erro", "Anexe o comprovante antes de enviar.") + `#p${id}`);
   const { email, whats, nome } = contato(c), cfg = configEnvio();
-  const texto = textoComprovante(c, nome), anexo = { nome: arq.nome, tipo: arq.tipo, dados: arq.dados };
+  const texto = textoComprovante(c, nome, await nomeRemetente()), anexo = { nome: arq.nome, tipo: arq.tipo, dados: arq.dados };
   const foi: string[] = [], falhou: string[] = [];
   if (email && cfg.email) {
     try { await enviarEmail(email, assuntoComprovante(c), texto, anexo); foi.push(email); } catch (e) { falhou.push(e instanceof Error ? e.message : "e-mail"); }
@@ -147,7 +148,7 @@ export default async function HistoricoPagamentos({ searchParams }: { searchPara
   const meses = new Map<string, typeof pagos>();
   for (const c of pagos) { const k = chave(dia(c.pagoEm!)).slice(0, 7); meses.set(k, [...(meses.get(k) ?? []), c]); }
   const edita = pode(u.permissoes, "financeiro", "editar"), cria = pode(u.permissoes, "financeiro", "criar");
-  const cfg = configEnvio(), automatico = cfg.email || cfg.whats, base = await origem();
+  const cfg = configEnvio(), automatico = cfg.email || cfg.whats, base = await origem(), remetente = await nomeRemetente();
   const qsAtual = new URLSearchParams(Object.entries(sp).filter(([k, v]) => v && !["ok", "erro", "novo"].includes(k)) as [string, string][]).toString();
   const url = `/financeiro/historico${qsAtual ? "?" + qsAtual : ""}`;
   const H = ({ n, v }: { n: string; v: string }) => <input type="hidden" name={n} value={v} />;
@@ -217,7 +218,7 @@ export default async function HistoricoPagamentos({ searchParams }: { searchPara
               const nota = c.notaFiscal ?? c.pedidoCompra?.notaFiscal;
               const { email, whats, nome } = contato(c);
               const comp = c.comprovantes[0];
-              const texto = textoComprovante(c, nome), link = comp ? `${base}/api/comprovante/${comp.token}` : "", nW = numeroWhats(whats);
+              const texto = textoComprovante(c, nome, remetente), link = comp ? `${base}/api/comprovante/${comp.token}` : "", nW = numeroWhats(whats);
               return (
                 <tr key={c.id} id={`p${c.id}`} className={String(c.id) === sp.id ? "marcado" : undefined}>
                   <td className="data">{dataDia(dia(c.pagoEm!))}</td>

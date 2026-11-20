@@ -7,7 +7,7 @@ import { dataDia } from "./formato";
 import { registrarPreco } from "./precos";
 import { avisarDepois } from "./notificacoes";
 import { conversarIA, iaLigada, lerPrecosSimples, type Anexo, type ItemCotado, type ResultadoIA } from "./ia";
-import { enviarMidiaDaBiblioteca, enviarModelo, enviarTexto, guardarMensagem, numeroWhats, primeiroNome, quemE, whatsLigado } from "./whatsapp";
+import { nomeRemetente, enviarMidiaDaBiblioteca, enviarModelo, enviarTexto, guardarMensagem, numeroWhats, primeiroNome, quemE, whatsLigado } from "./whatsapp";
 
 /** Segunda-feira da semana (data de calendário). */
 export function segundaDaSemana(d = dia()) {
@@ -54,8 +54,8 @@ export function proximasCotacoes(c: ConfigAuto, quantas = 3) {
   return out;
 }
 
-export const textoPedidoCotacao = (nome: string, itens: ItemCotado[]) =>
-  `Oi${nome ? `, ${nome}` : ""}! Tudo bem? Aqui é o Sambot, da R.G.A. Estamos fechando as compras da semana. Pode me passar o preço atual de: ${listaItens(itens)}? Se puder, manda também o prazo de entrega. Obrigado!`;
+export const textoPedidoCotacao = (nome: string, itens: ItemCotado[], remetente: string) =>
+  `Oi${nome ? `, ${nome}` : ""}! Tudo bem? Aqui é o ${remetente}, da R.G.A. Estamos fechando as compras da semana. Pode me passar o preço atual de: ${listaItens(itens)}? Se puder, manda também o prazo de entrega. Obrigado!`;
 
 /** Abre (ou reabre) a cotação da semana e manda o pedido para quem ainda não recebeu. */
 export async function abrirCotacao(usuario: string) {
@@ -83,7 +83,7 @@ export async function enviarPedido(cfId: number, lembrete = false) {
   const itens = await itensDoFornecedor(f.id);
   const nome = primeiroNome(f.contato) || f.nome;
   try {
-    await enviarModelo(numero, modelo, [nome, listaItens(itens)], textoPedidoCotacao(nome, itens), { fornecedorId: f.id, nome: f.contato || f.nome });
+    await enviarModelo(numero, modelo, [nome, listaItens(itens)], textoPedidoCotacao(nome, itens, await nomeRemetente()), { fornecedorId: f.id, nome: f.contato || f.nome });
     await db.cotacaoFornecedor.update({ where: { id: cfId }, data: lembrete ? { lembradoEm: new Date(), erro: null } : { status: "enviado", enviadoEm: new Date(), erro: null } });
     return true;
   } catch (e) {
@@ -127,11 +127,11 @@ export async function receberMensagem(m: Entrada, opcoes: { responder: boolean; 
   let r: ResultadoIA;
   try {
     r = iaLigada()
-      ? await conversarIA({ papel: quem?.tipo ?? "desconhecido", nome: quem?.nome ?? m.nomePerfil ?? null, empresa: quem?.empresa ?? null, itens, historico: historico.map((h) => ({ direcao: h.direcao, texto: h.texto, quando: h.criadoEm })), mensagem: m.texto, anexos: m.anexos, midias, hoje: dataDia(dia()) })
-      : lerPrecosSimples(m.texto, itens);
+      ? await conversarIA({ papel: quem?.tipo ?? "desconhecido", nome: quem?.nome ?? m.nomePerfil ?? null, empresa: quem?.empresa ?? null, itens, historico: historico.map((h) => ({ direcao: h.direcao, texto: h.texto, quando: h.criadoEm })), mensagem: m.texto, anexos: m.anexos, midias, hoje: dataDia(dia()), remetente: await nomeRemetente() })
+      : lerPrecosSimples(m.texto, itens, await nomeRemetente());
   } catch (e) {
     console.error("IA do WhatsApp falhou", e);
-    r = lerPrecosSimples(m.texto, itens);
+    r = lerPrecosSimples(m.texto, itens, await nomeRemetente());
   }
 
   // preços lidos → a conferir
@@ -144,9 +144,9 @@ export async function receberMensagem(m: Entrada, opcoes: { responder: boolean; 
       const respondidos = new Set((await tx.cotacaoPreco.findMany({ where: { cotacaoFornecedorId: cf.id, status: { not: "descartado" } }, select: { itemId: true } })).map((x) => x.itemId));
       await tx.cotacaoFornecedor.update({ where: { id: cf.id }, data: { status: itens.every((i) => respondidos.has(i.id)) ? "completo" : "respondeu", respondidoEm: new Date() } });
     });
-    await avisarDepois("cotacao", { titulo: "Cotação: preço para conferir", texto: `${quem?.empresa ?? quem?.nome}: ${r.resumoParaEquipe}`.slice(0, 180), link: "/compras/cotacao", tag: "cotacao" });
+    await avisarDepois("cotacao", { titulo: "Cotação: preço para conferir", texto: `${quem?.empresa ?? quem?.nome}: ${r.resumoParaEquipe}`.slice(0, 180), link: "/sambot", tag: "cotacao" });
   } else if (r.precisaDeGente) {
-    await avisarDepois("whatsapp", { titulo: `WhatsApp: ${quem?.nome ?? m.nomePerfil ?? m.telefone}`, texto: r.resumoParaEquipe.slice(0, 180), link: `/compras/whatsapp?tel=${m.telefone}`, tag: `whats-${m.telefone}` });
+    await avisarDepois("whatsapp", { titulo: `WhatsApp: ${quem?.nome ?? m.nomePerfil ?? m.telefone}`, texto: r.resumoParaEquipe.slice(0, 180), link: `/sambot/conversas?tel=${m.telefone}`, tag: `whats-${m.telefone}` });
   }
 
   // resposta (com um pequeno tempo de "digitando", como gente)

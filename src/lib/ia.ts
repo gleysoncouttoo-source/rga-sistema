@@ -31,7 +31,7 @@ const Resultado = z.object({
 });
 export type ResultadoIA = z.infer<typeof Resultado>;
 
-const SISTEMA = `Você é o Sambot, o assistente automático que cuida do WhatsApp da R.G.A Indústria e Ferramentaria, uma fábrica de fechaduras. Conversa com fornecedores (cotação semanal de matéria-prima) e com colaboradores (recebem comprovantes de pagamento).
+const SISTEMA = `Você é o Sambot, o assistente automático que cuida do WhatsApp da R.G.A Indústria e Ferramentaria, uma fábrica de fechaduras. Você escreve em nome do dono, cujo nome vem em "Você assina como" no contexto: é assim que se apresenta ("Aqui é o Gleyson Couto, da R.G.A"). Conversa com fornecedores (cotação semanal de matéria-prima) e com colaboradores (recebem comprovantes de pagamento).
 
 Jeito de escrever:
 - Como uma pessoa simpática da equipe de compras escreveria no WhatsApp: frases curtas, português do dia a dia do Brasil, sem formalidade de e-mail, sem markdown, sem listas com marcadores.
@@ -40,7 +40,7 @@ Jeito de escrever:
 - Mensagens de 1 a 3 frases. Nunca repita a lista inteira de itens se a pessoa já respondeu parte; pergunte só o que falta.
 
 Regras que não podem ser quebradas:
-- Se alguém perguntar a sério se está falando com um robô, uma pessoa ou uma inteligência artificial, diga a verdade com naturalidade: você é o Sambot, o assistente automático da R.G.A e a equipe acompanha as conversas. Nunca diga que é humano nem use outro nome. Quando fizer sentido se apresentar, diga que é o Sambot da R.G.A.
+- Se alguém perguntar a sério se está falando com um robô, uma pessoa ou uma inteligência artificial, diga a verdade com naturalidade: você é o Sambot, o assistente automático que responde pelo WhatsApp do dono da R.G.A, e ele acompanha as conversas. Vale também se perguntarem "é você mesmo?" ou se é o próprio dono digitando. Nunca afirme ser uma pessoa digitando.
 - Nunca invente preço, prazo ou quantidade. Nunca feche pedido, negocie, prometa compra, data de pagamento ou valores. Se pedirem isso, diga que vai passar para a equipe e marque precisaDeGente = true.
 - Reclamação, cobrança, problema com pagamento ou qualquer coisa que você não saiba: diga que vai repassar para a equipe e marque precisaDeGente = true.
 
@@ -69,9 +69,10 @@ export async function conversarIA(p: {
   anexos?: Anexo[];
   midias: MidiaOpcao[];
   hoje: string;
+  remetente: string;
 }): Promise<ResultadoIA> {
   const contexto = [
-    `Hoje: ${p.hoje}.`,
+    `Hoje: ${p.hoje}. Você assina como: ${p.remetente}.`,
     `Quem escreveu: ${p.papel}${p.nome ? `, ${p.nome}` : ""}${p.empresa ? ` (empresa ${p.empresa})` : ""}.`,
     p.itens.length
       ? `Cotação desta semana aberta. Itens que este fornecedor vende (itemId | nome | unidade no sistema | último preço):\n${p.itens.map((i) => `${i.id} | ${i.nome}${i.material ? ` (${i.material})` : ""} | ${i.unidade} | ${i.ultimoPreco != null ? `R$ ${i.ultimoPreco.toFixed(4)}` : "sem preço"}`).join("\n")}`
@@ -116,7 +117,7 @@ const semAcento = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLo
 const PALAVRAS_FRACAS = new Set(["para", "com", "sem", "chapa", "barra", "peca", "tipo", "cor", "de", "da", "do"]);
 
 /** Procura o nome (ou o material) de cada item no texto e pega o primeiro valor em reais logo depois. */
-export function lerPrecosSimples(texto: string, itens: ItemCotado[]): ResultadoIA {
+export function lerPrecosSimples(texto: string, itens: ItemCotado[], remetente = "Gleyson Couto"): ResultadoIA {
   const t = semAcento(texto);
   const precos: ResultadoIA["precos"] = [];
   const palavras = (it: ItemCotado) => [...new Set([it.material, ...it.nome.split(/[\s/()-]+/)].filter(Boolean).map((w) => semAcento(String(w))).filter((w) => w.length >= 4 && !PALAVRAS_FRACAS.has(w)))];
@@ -138,7 +139,7 @@ export function lerPrecosSimples(texto: string, itens: ItemCotado[]): ResultadoI
   const base = precos.length ? "Anotado, muito obrigado! Qualquer novidade a gente te chama." : "Opa, recebido! Vou passar aqui para a equipe.";
   return {
     precos,
-    resposta: perguntaRobo ? `${base} E respondendo: sou o Sambot, o assistente automático da R.G.A, e a equipe acompanha tudo por aqui.` : base,
+    resposta: perguntaRobo ? `${base} E respondendo: quem responde aqui é o Sambot, o assistente automático do ${remetente}, e ele acompanha tudo por aqui.` : base,
     midiaId: null,
     precisaDeGente: precos.length === 0,
     resumoParaEquipe: precos.length ? `Leu ${precos.length} preço(s) pela leitura simples.` : "Mensagem sem preço reconhecido.",

@@ -169,3 +169,9 @@ export async function transcrever(dados: Uint8Array, mime: string) {
   const j = (await r.json().catch(() => ({}))) as { text?: string };
   return r.ok && j.text ? j.text.trim() : null;
 }
+
+/** Nome com que o Sambot se apresenta nas mensagens (Sambot → Cotação). Padrão: Gleyson Couto. */
+export async function nomeRemetente() {
+  const c = await db.configuracao.findUnique({ where: { chave: "sambotNome" } });
+  return c?.valor?.trim() || "Gleyson Couto";
+}
