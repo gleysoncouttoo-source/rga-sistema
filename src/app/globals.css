@@ -319,5 +319,7 @@ body.com-instalar { padding-bottom: 84px; }
 /* Avisos no celular (Minha conta) */
 .avisos-aparelho { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px; border: 1px solid var(--borda); border-radius: 12px; background: var(--bg); }
 .avisos-status { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.avisos-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.avisos-areas { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.avisos-area { border: 1px solid var(--borda); border-left: 4px solid var(--acento); border-radius: 10px; padding: 10px 14px 12px; margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.avisos-area legend { font-weight: 700; padding: 0 6px; margin-left: -6px; }
 @media (max-width: 640px) { .avisos-aparelho .btn.destaque { width: 100%; } }

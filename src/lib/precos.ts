@@ -1,6 +1,7 @@
 // Histórico de preços de compra: valor pago hoje, recorde (menor preço já pago) e variação em 30/60/90 dias.
 import type { Prisma } from "@prisma/client";
 import { db } from "./db";
+import { avisarDepois } from "./notificacoes";
 
 type Tx = Prisma.TransactionClient;
 const DIA = 86_400_000;
@@ -12,7 +13,15 @@ export async function registrarPreco(tx: Tx, p: {
   const recordeAntes = await tx.precoHistorico.aggregate({ where: { itemId: p.itemId }, _min: { preco: true } });
   const maisNovo = await tx.precoHistorico.findFirst({ where: { itemId: p.itemId, data: { gt: p.data } } });
   await tx.precoHistorico.create({ data: { ...p, fornecedorId: p.fornecedorId ?? null, pedidoCompraId: p.pedidoCompraId ?? null } });
-  if (!maisNovo) await tx.item.update({ where: { id: p.itemId }, data: { precoCompra: p.preco } });
+  if (!maisNovo) {
+    const anterior = await tx.precoHistorico.findFirst({ where: { itemId: p.itemId, data: { lte: p.data } }, orderBy: [{ data: "desc" }, { id: "desc" }], skip: 1 });
+    const it = await tx.item.update({ where: { id: p.itemId }, data: { precoCompra: p.preco } });
+    if (anterior && p.preco > anterior.preco * 1.001) {
+      const pct = ((p.preco / anterior.preco - 1) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+      const r$ = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 4 });
+      await avisarDepois("preco", { titulo: "Preço de compra subiu", texto: `${it.nome}: ${r$(anterior.preco)} → ${r$(p.preco)} (+${pct}%)`, link: "/compras/precos", tag: `preco-${it.id}` });
+    }
+  }
   const antes = recordeAntes._min.preco;
   return { novoRecorde: antes != null && p.preco < antes - 1e-9 };
 }

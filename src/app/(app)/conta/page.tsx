@@ -6,7 +6,8 @@ import { abasDoUsuario } from "@/lib/permissoes";
 import EscolherAbas from "@/components/EscolherAbas";
 import AtivarAvisos from "@/components/AtivarAvisos";
 import { acaoSalvarAvisos } from "@/lib/acoesNotificacoes";
-import { avisosDisponiveis, chavesPush, lerEscolhidos } from "@/lib/notificacoes";
+import { avisoLigado, avisosDisponiveis, chavesPush, lerEscolhidos } from "@/lib/notificacoes";
+import { ABAS } from "@/lib/permissoes";
 
 async function trocarSenha(form: FormData) {
   "use server";
@@ -29,6 +30,7 @@ export default async function Conta({ searchParams }: { searchParams: Promise<{ 
   const escolhidos = lerEscolhidos(u.notificacoes);
   const [chaves, aparelhos] = await Promise.all([chavesPush(), db.aparelhoPush.count({ where: { usuarioId: u.id } })]);
   const diretor = u.perfil.nome === "Diretor";
+  const areas = ABAS.map((a) => ({ nome: a.nome, avisos: disponiveis.filter((t) => t.aba === a.id) })).filter((a) => a.avisos.length);
   return (
     <>
       <h1>Minha conta</h1>
@@ -55,9 +57,14 @@ export default async function Conta({ searchParams }: { searchParams: Promise<{ 
         <h3 style={{ marginBottom: 8 }}>Quais avisos receber</h3>
         {disponiveis.length ? (
           <form action={acaoSalvarAvisos}>
-            <div className="avisos-lista">
-              {disponiveis.map((t) => (
-                <label key={t.id} className="chk"><input type="checkbox" name={`aviso:${t.id}`} defaultChecked={escolhidos == null || escolhidos.includes(t.id)} /> {t.nome}</label>
+            <div className="avisos-areas">
+              {areas.map((a) => (
+                <fieldset key={a.nome} className="avisos-area">
+                  <legend>{a.nome}</legend>
+                  {a.avisos.map((t) => (
+                    <label key={t.id} className="chk"><input type="checkbox" name={`aviso:${t.id}`} defaultChecked={avisoLigado(t, escolhidos)} /> {t.nome}</label>
+                  ))}
+                </fieldset>
               ))}
             </div>
             <div style={{ marginTop: 12 }}><button className="btn sec peq">Salvar avisos</button></div>

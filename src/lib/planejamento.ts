@@ -9,7 +9,7 @@ import { db } from "./db";
 import { chave, dia, diaUtilAnterior, diasEntre, menosDiasUteis, proximoDiaUtil, somaDias } from "./datas";
 import { dataCurta, dataDia } from "./formato";
 import { registrarPreco } from "./precos";
-import { avisar } from "./notificacoes";
+import { avisar, avisarDaAuditoria } from "./notificacoes";
 
 type Tx = Prisma.TransactionClient;
 
@@ -304,6 +304,7 @@ export async function entregarPedido(id: number, usuario: string) {
     await tx.pedidoCompra.deleteMany({ where: { pedidoVendaId: id, status: "sugerido" } });
     await tx.pedidoVenda.update({ where: { id }, data: { status: "entregue" } });
     await tx.auditoria.create({ data: { usuario, acao: "entregou pedido de venda", detalhe: `#${id}` } });
+    await avisarDaAuditoria(usuario, "entregou pedido de venda", `#${id}`);
   });
 }
 
@@ -313,6 +314,7 @@ export async function cancelarPedido(id: number, usuario: string) {
     await tx.pedidoCompra.deleteMany({ where: { pedidoVendaId: id, status: "sugerido" } });
     await tx.pedidoVenda.update({ where: { id }, data: { status: "cancelado" } });
     await tx.auditoria.create({ data: { usuario, acao: "cancelou pedido de venda", detalhe: `#${id}` } });
+    await avisarDaAuditoria(usuario, "cancelou pedido de venda", `#${id}`);
   });
 }
 
@@ -363,6 +365,7 @@ export async function reprogramarCompra(id: number, p: { fornecedorId?: number |
     });
     await lancarBoletos(tx, id, novoF, forn?.nome ?? "fornecedor a definir", esc.vencimentos, await valorCompra(tx, id), pc.status === "aprovado" ? "aberto" : "previsto");
     await tx.auditoria.create({ data: { usuario, acao: "reprogramou compra", detalhe: `#${id} para ${dataDia(esc.data)}` } });
+    await avisarDaAuditoria(usuario, "reprogramou compra", `#${id} para ${dataDia(esc.data)}`);
   });
 }
 
@@ -374,6 +377,7 @@ export async function aprovarCompra(id: number, usuario: string) {
     await tx.pedidoCompra.update({ where: { id }, data: { status: "aprovado", decididoPor: usuario } });
     await tx.contaPagar.updateMany({ where: { pedidoCompraId: id, status: "previsto" }, data: { status: "aberto" } });
     await tx.auditoria.create({ data: { usuario, acao: "aprovou compra", detalhe: `#${id}` } });
+    await avisarDaAuditoria(usuario, "aprovou compra", `#${id}`);
   });
 }
 
@@ -382,6 +386,7 @@ export async function cancelarCompra(id: number, usuario: string) {
     await tx.pedidoCompra.update({ where: { id }, data: { status: "cancelado", decididoPor: usuario } });
     await tx.contaPagar.deleteMany({ where: { pedidoCompraId: id, status: { not: "pago" } } });
     await tx.auditoria.create({ data: { usuario, acao: "cancelou compra", detalhe: `#${id}` } });
+    await avisarDaAuditoria(usuario, "cancelou compra", `#${id}`);
   });
 }
 
@@ -429,6 +434,7 @@ export async function receberCompra(id: number, usuario: string, r: {
       data: { status: "recebido", recebidoEm: quando, notaFiscal: r.notaFiscal || null, obsRecebimento: [parcial ? "Recebido com quantidade menor que a pedida." : "", r.obs ?? ""].filter(Boolean).join(" ") || null },
     });
     await tx.auditoria.create({ data: { usuario, acao: "recebeu compra", detalhe: `#${id}${recordes.length ? ` — recorde de preço: ${recordes.join(", ")}` : ""}` } });
+    await avisarDaAuditoria(usuario, "recebeu compra", `#${id}${recordes.length ? ` — recorde de preço: ${recordes.join(", ")}` : ""}`);
     return { recordes };
   });
 }

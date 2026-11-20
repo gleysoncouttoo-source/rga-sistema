@@ -38,12 +38,13 @@ export async function acaoAvisoTeste() {
   return { ok: true, enviados: await avisoTeste(u.id) };
 }
 
-/** Salva quais avisos o login quer receber. Só aceita os da área liberada dele. */
+/** Salva quais avisos o login quer receber. Só mexe nos da área liberada dele. */
 export async function acaoSalvarAvisos(form: FormData) {
   const u = await usuarioAtual();
   if (!u) redirect("/login");
-  const escolhidos = avisosDisponiveis(u.permissoes, u.liberadas).filter((t) => form.get(`aviso:${t.id}`) === "on").map((t) => t.id);
-  await db.usuario.update({ where: { id: u.id }, data: { notificacoes: JSON.stringify(escolhidos) } });
-  await auditar(u.nome, "escolheu avisos no celular", escolhidos.join(", ") || "nenhum");
+  const on: string[] = [], off: string[] = [];
+  for (const t of avisosDisponiveis(u.permissoes, u.liberadas)) (form.get(`aviso:${t.id}`) === "on" ? on : off).push(t.id);
+  await db.usuario.update({ where: { id: u.id }, data: { notificacoes: JSON.stringify({ on, off }) } });
+  await auditar(u.nome, "escolheu avisos no celular", `${on.length} ligado(s)`);
   redirect("/conta?ok=" + encodeURIComponent("Avisos salvos.") + "#avisos");
 }
