@@ -2,6 +2,7 @@
   "crons": [
     { "path": "/api/shopee/sincronizar", "schedule": "0 9 * * *" },
     { "path": "/api/notificacoes/manha", "schedule": "30 10 * * *" },
-    { "path": "/api/notificacoes/fim-do-dia", "schedule": "30 20 * * *" }
+    { "path": "/api/notificacoes/fim-do-dia", "schedule": "30 20 * * *" },
+    { "path": "/api/cotacao/automatica", "schedule": "0 11 * * *" }
   ]
 }

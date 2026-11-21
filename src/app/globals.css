@@ -323,3 +323,16 @@ body.com-instalar { padding-bottom: 84px; }
 .avisos-area { border: 1px solid var(--borda); border-left: 4px solid var(--acento); border-radius: 10px; padding: 10px 14px 12px; margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .avisos-area legend { font-weight: 700; padding: 0 6px; margin-left: -6px; }
 @media (max-width: 640px) { .avisos-aparelho .btn.destaque { width: 100%; } }
+
+/* WhatsApp: conversa em balões */
+.bolha { max-width: 560px; padding: 9px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--borda); white-space: pre-wrap; font-size: .93rem; }
+.bolha.saida { background: #E7F8DC; border-color: #CDEBB8; margin-left: auto; }
+.bolha.simulada { background: var(--bg); border-style: dashed; }
+.bolha .hora { display: block; text-align: right; font-size: .72rem; color: var(--suave); margin-top: 4px; }
+.conversa { display: flex; flex-direction: column; gap: 8px; padding: 14px; background: #F4F1EA; border-radius: var(--raio); max-height: 70vh; overflow-y: auto; }
+.contatos a { display: flex; justify-content: space-between; gap: 8px; padding: 10px 12px; border-radius: 8px; text-decoration: none; color: var(--texto); }
+.contatos a.ativo, .contatos a:hover { background: var(--linha); }
+details > summary.btn { list-style: none; }
+details > summary.btn::-webkit-details-marker { display: none; }
+.form-midia input, .form-midia select, .form-midia textarea { width: 100%; box-sizing: border-box; min-width: 0; }
+@media (max-width: 760px) { .card:has(> .contatos) { grid-template-columns: 1fr !important; } }
