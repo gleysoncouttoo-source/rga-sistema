@@ -29,6 +29,7 @@ export const ABAS = [
   { id: "lucros", nome: "Lucros", href: "/lucros", modulo: "custos" },
   { id: "funcionarios", nome: "Colaboradores", href: "/funcionarios", modulo: "funcionarios" },
   { id: "ponto", nome: "Cartão de ponto", href: "/funcionarios/ponto", modulo: "funcionarios" },
+  { id: "folha", nome: "Folha do mês", href: "/funcionarios/folha", modulo: "funcionarios" },
   { id: "historico", nome: "Histórico", href: "/historico", modulo: "historico" },
   { id: "usuarios", nome: "Usuários e perfis", href: "/usuarios", modulo: "usuarios" },
   { id: "apontar", nome: "Apontar produção", href: "/apontar", modulo: null },
@@ -44,7 +45,7 @@ export const GRUPOS_MENU: { nome: string; abas: string[] }[] = [
   { nome: "Compras", abas: ["compras"] },
   { nome: "Sambot", abas: ["sambot"] },
   { nome: "Financeiro", abas: ["financeiro", "custos", "despesas-custo", "lucros"] },
-  { nome: "Colaboradores", abas: ["funcionarios", "ponto"] },
+  { nome: "Colaboradores", abas: ["funcionarios", "ponto", "folha"] },
   { nome: "Histórico", abas: ["historico"] },
   { nome: "Usuários e perfis", abas: ["usuarios"] },
 ];
@@ -98,7 +99,7 @@ export function abasDoUsuario(p: Permissoes, ocultasJson: string | null | undefi
 }
 
 // Módulos previstos no plano, ainda não construídos
-export const MODULOS_FUTUROS = ["Folha", "Ferramentaria", "WhatsApp"];
+export const MODULOS_FUTUROS = ["Ferramentaria", "WhatsApp"];
 
 export const ACOES = [
   { id: "ver", nome: "Ver" },

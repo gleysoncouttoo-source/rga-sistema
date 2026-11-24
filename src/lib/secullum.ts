@@ -69,7 +69,13 @@ async function importarFuncionarios(s: Sessao) {
     const nome = String(campo(p, "Nome") ?? "").trim();
     const cpf = so(campo(p, "Cpf")) || null;
     const pis = so(campo(p, "NumeroPis")) || null;
-    const dados = { nome, cpf, pis, numeroFolha: (campo(p, "NumeroFolha") as string) ?? null, admissao: dataOuNull(campo(p, "Admissao")), demissao: dataOuNull(campo(p, "Demissao")) };
+    const txt = (k: string) => { const v = campo(p, k); return v == null || v === "" ? null : String(typeof v === "object" ? (v as Record<string, unknown>).Descricao ?? "" : v) || null; };
+    const { Foto: _foto, foto: _f2, ...semFoto } = p as Record<string, unknown>;
+    const dados = {
+      nome, cpf, pis, numeroFolha: txt("NumeroFolha"), admissao: dataOuNull(campo(p, "Admissao")), demissao: dataOuNull(campo(p, "Demissao")),
+      departamento: txt("DepartamentoDescricao") ?? txt("Departamento"), funcao: txt("FuncaoDescricao") ?? txt("Funcao"),
+      horario: [txt("HorarioNumero"), txt("HorarioDescricao")].filter(Boolean).join(" — ") || null, dados: JSON.stringify(semFoto),
+    };
     await db.pontoPessoa.upsert({ where: { secullumId: id }, create: { secullumId: id, ...dados }, update: dados });
     const jaLigado = nossos.find((f) => f.secullumId === id);
     const alvo = jaLigado ?? (cpf && nossos.find((f) => !f.secullumId && f.cpf === cpf)) ?? nossos.find((f) => !f.secullumId && normal(f.nome) === normal(nome));
@@ -111,7 +117,7 @@ async function importarBatidas(s: Sessao, inicio: Date, fim: Date) {
   return { total, novas };
 }
 
-/** Totais do mês pelo cálculo do próprio Secullum (limite deles: 100 por hora). */
+/** Cálculo do mês pelo próprio Secullum, dia a dia e total (limite deles: 100 chamadas por hora). */
 async function importarTotais(s: Sessao, mes: string) {
   const [ano, m] = mes.split("-").map(Number);
   const ini = `${mes}-01`, fim = chave(new Date(Date.UTC(ano, m, 0, 12)));
@@ -119,13 +125,32 @@ async function importarTotais(s: Sessao, mes: string) {
   let ok = 0;
   for (const f of funcs) {
     try {
-      const r = await chamar<{ Colunas?: string[]; Totais?: string[]; colunas?: string[]; totais?: string[] }>(s, "Calcular/SomenteTotais", { FuncionarioCpf: f.cpf ?? "", FuncionarioPis: f.pis ?? "", DataInicial: ini, DataFinal: fim });
-      const colunas = r?.Colunas ?? r?.colunas ?? [], totais = r?.Totais ?? r?.totais ?? [];
-      await db.pontoTotal.upsert({ where: { funcionarioId_mes: { funcionarioId: f.id, mes } }, create: { funcionarioId: f.id, mes, colunas: JSON.stringify(colunas), totais: JSON.stringify(totais) }, update: { colunas: JSON.stringify(colunas), totais: JSON.stringify(totais) } });
+      const r = await chamar<{ Colunas?: string[]; Totais?: string[]; Linhas?: unknown[]; colunas?: string[]; totais?: string[]; linhas?: unknown[] }>(s, "Calcular", { FuncionarioCpf: f.cpf ?? "", FuncionarioPis: f.pis ?? "", DataInicial: ini, DataFinal: fim });
+      const d = { colunas: JSON.stringify(r?.Colunas ?? r?.colunas ?? []), totais: JSON.stringify(r?.Totais ?? r?.totais ?? []), linhas: JSON.stringify(r?.Linhas ?? r?.linhas ?? []) };
+      await db.pontoTotal.upsert({ where: { funcionarioId_mes: { funcionarioId: f.id, mes } }, create: { funcionarioId: f.id, mes, ...d }, update: d });
       ok++;
     } catch { /* um funcionário com erro não para os outros */ }
   }
   return ok;
+}
+
+/** Férias, atestados e licenças lançados no Secullum que tocam o período. */
+async function importarAfastamentos(s: Sessao, inicio: Date, fim: Date) {
+  const lista = await chamar<Record<string, unknown>[]>(s, `FuncionariosAfastamentos?dataInicio=${chave(inicio)}&dataFim=${chave(fim)}`);
+  const funcs = await db.funcionario.findMany({ where: { OR: [{ cpf: { not: null } }, { pis: { not: null } }] } });
+  let n = 0;
+  for (const a of lista ?? []) {
+    const ini = String(campo(a, "Inicio") ?? "").slice(0, 10), fi = String(campo(a, "Fim") ?? "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ini) || !/^\d{4}-\d{2}-\d{2}$/.test(fi)) continue;
+    const cpf = so(campo(a, "Cpf")) || null, pis = so(campo(a, "NumeroPis")) || null;
+    const justificativa = (campo(a, "JustificativaNome") as string) ?? null;
+    const f = funcs.find((x) => (cpf && so(x.cpf) === cpf) || (pis && so(x.pis) === pis));
+    const k = `${cpf ?? pis}|${ini}|${fi}|${justificativa ?? ""}`;
+    const dados = { funcionarioId: f?.id ?? null, cpf, pis, inicio: dia(ini), fim: dia(fi), motivo: (campo(a, "Motivo") as string) || null, justificativa };
+    await db.pontoAfastamento.upsert({ where: { chave: k }, create: { chave: k, ...dados }, update: dados });
+    n++;
+  }
+  return n;
 }
 
 export type ResultadoSync = { ok: boolean; mensagem: string };
@@ -138,9 +163,12 @@ export async function sincronizarPonto(dias = 7): Promise<ResultadoSync> {
     const hoje = dia();
     const b = await importarBatidas(s, somaDias(hoje, -(dias - 1)), hoje);
     const mes = chave(hoje).slice(0, 7);
+    const inicioAnterior = dia(chave(somaDias(dia(`${mes}-01`), -1)).slice(0, 7) + "-01");
+    let af = 0;
+    try { af = await importarAfastamentos(s, inicioAnterior, somaDias(hoje, 60)); } catch { /* sem afastamentos não para o resto */ }
     let t = await importarTotais(s, mes);
-    if (hoje.getUTCDate() <= 5) t += await importarTotais(s, chave(somaDias(hoje, -hoje.getUTCDate())).slice(0, 7));
-    const msg = `${f.total} funcionário(s) no Secullum, ${f.ligados} ligado(s) aos colaboradores. ${b.total} batida(s) nos últimos ${dias} dias, ${b.novas} nova(s). Totais do mês de ${t} pessoa(s).`;
+    if (hoje.getUTCDate() <= 10 || dias > 31) t += await importarTotais(s, chave(inicioAnterior).slice(0, 7));
+    const msg = `${f.total} funcionário(s) no Secullum, ${f.ligados} ligado(s) aos colaboradores. ${b.total} batida(s) nos últimos ${dias} dias, ${b.novas} nova(s). ${af} afastamento(s). Cálculo do mês de ${t} pessoa(s).`;
     await salvarStatus(true, msg);
     return { ok: true, mensagem: msg };
   } catch (e) {
@@ -202,5 +230,16 @@ export async function cartoes(inicio: Date, fim: Date, funcionarioId?: number) {
 /** Totais do Secullum de um mês, por colaborador: { colunas, totais }. */
 export async function totaisDoMes(mes: string) {
   const l = await db.pontoTotal.findMany({ where: { mes } });
-  return new Map(l.map((t) => [t.funcionarioId, { colunas: JSON.parse(t.colunas) as string[], totais: JSON.parse(t.totais) as string[], em: t.atualizadoEm }]));
+  return new Map(l.map((t) => [t.funcionarioId, {
+    colunas: JSON.parse(t.colunas) as string[], totais: JSON.parse(t.totais) as string[], em: t.atualizadoEm,
+    linhas: (JSON.parse(t.linhas || "[]") as { Key?: string; Value?: string[]; key?: string; value?: string[] }[]).map((x) => ({ data: String(x.Key ?? x.key ?? "").slice(0, 10), valores: x.Value ?? x.value ?? [] })),
+  }]));
+}
+
+/** Afastamentos que tocam o período, por colaborador. */
+export async function afastamentosDoPeriodo(inicio: Date, fim: Date) {
+  const l = await db.pontoAfastamento.findMany({ where: { funcionarioId: { not: null }, inicio: { lte: fim }, fim: { gte: inicio } }, orderBy: { inicio: "asc" } });
+  const m = new Map<number, typeof l>();
+  for (const a of l) m.set(a.funcionarioId!, [...(m.get(a.funcionarioId!) ?? []), a]);
+  return m;
 }

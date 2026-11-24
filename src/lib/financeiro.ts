@@ -56,7 +56,7 @@ export async function gerarContasMensais() {
   if (novas.length) await db.contaPagar.createMany({ data: novas, skipDuplicates: true });
   // salário alterado no cadastro: atualiza as contas ainda não pagas
   for (const f of funcs) {
-    await db.contaPagar.updateMany({ where: { funcionarioId: f.id, status: "aberto", vencimento: { gte: hoje }, NOT: { valor: f.salario! } }, data: { valor: f.salario! } });
+    await db.contaPagar.updateMany({ where: { funcionarioId: f.id, status: "aberto", vencimento: { gte: hoje }, folhaMes: null, NOT: { valor: f.salario! } }, data: { valor: f.salario! } });
   }
   // chave Pix cadastrada depois: completa as contas em aberto
   for (const f of funcs) if (f.chavePix) await db.contaPagar.updateMany({ where: { funcionarioId: f.id, status: "aberto", chavePix: null }, data: { chavePix: f.chavePix, formaPagamento: "pix" } });

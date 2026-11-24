@@ -6,6 +6,7 @@
 import "server-only";
 import { db } from "@/lib/db";
 import { custoHora, lerConfig } from "@/lib/config";
+import { custosHoraReais } from "@/lib/folha";
 import { contasDoMes, mesDoCusto } from "@/lib/despesasCusto";
 
 export type CfgLucro = { impostoVendaPct: number; custoExtraPct: number; custoExtraUnidade: number };
@@ -19,12 +20,13 @@ export async function lerCfgLucro(): Promise<CfgLucro> {
 export async function moPorOperacao(dias = 30) {
   const cfg = await lerConfig();
   const desde = new Date(Date.now() - dias * 86_400_000);
-  const [ops, funcs, aps] = await Promise.all([
+  const [ops, funcs, aps, reais] = await Promise.all([
     db.operacao.findMany({ where: { ativo: true }, include: { etapa: true } }),
     db.funcionario.findMany({ where: { ativo: true, salario: { not: null } } }),
     db.apontamento.findMany({ where: { data: { gte: desde } } }),
+    custosHoraReais(),
   ]);
-  const horas = funcs.map((f) => ({ setor: f.setor, ch: custoHora(f.salario, cfg, f)! }));
+  const horas = funcs.map((f) => ({ setor: f.setor, ch: reais.get(f.id) ?? custoHora(f.salario, cfg, f)! }));
   const media = (l: number[]) => (l.length ? l.reduce((a, b) => a + b, 0) / l.length : null);
   const chFabrica = media(horas.map((h) => h.ch));
   const chSetor = (s: string) => media(horas.filter((h) => h.setor === s).map((h) => h.ch)) ?? chFabrica;
