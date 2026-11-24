@@ -1,4 +1,4 @@
-// Todo dia às 20h (Vercel Cron): busca no Secullum as batidas dos últimos 7 dias e os totais do mês.
+// Busca (chamada à parte, com o CRON_SECRET; a busca diária automática vai junto com /api/shopee/sincronizar às 6h): no Secullum as batidas dos últimos 7 dias e os totais do mês.
 import { NextResponse } from "next/server";
 import { secullumLigado, sincronizarPonto } from "@/lib/secullum";
 

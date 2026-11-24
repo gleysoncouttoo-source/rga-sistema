@@ -118,7 +118,7 @@ export default async function Ponto({ searchParams }: { searchParams: Promise<{ 
             <div className="suave" style={{ fontSize: ".88rem", marginTop: 4 }}>
               {!ligado
                 ? "Falta colocar o e-mail e a senha da conta Secullum nas variáveis da Vercel (SECULLUM_EMAIL e SECULLUM_SENHA)."
-                : status ? <>Última busca {dataHora(status.em)}: {status.msg}</> : "As batidas são buscadas sozinhas todo dia às 20h. Você também pode buscar agora."}
+                : status ? <>Última busca {dataHora(status.em)}: {status.msg}</> : "As batidas são buscadas sozinhas todo dia às 6h da manhã (o dia anterior completo). Você também pode buscar agora."}
             </div>
           </div>
           {edita && ligado && (
