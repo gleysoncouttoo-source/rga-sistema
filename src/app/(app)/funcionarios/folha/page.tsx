@@ -12,7 +12,7 @@ import { hhmm, statusPonto } from "@/lib/secullum";
 import { csvEspelho, csvMovimento, emailContador, fecharFolha, folhaDoMes, reabrirFolha } from "@/lib/folha";
 import IrPara from "@/components/IrPara";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const mesAnterior = () => { const h = mesAtual(); const d = new Date(Date.UTC(Number(h.slice(0, 4)), Number(h.slice(5, 7)) - 2, 15)); return d.toISOString().slice(0, 7); };
 const proximoMes = (m: string) => new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 15)).toISOString().slice(0, 7);

@@ -10,8 +10,9 @@ import { dia } from "@/lib/datas";
 import { mesAtual, mesValido, nomeMes } from "@/lib/despesasCusto";
 import { NOME_ORIGEM, cartoes, hhmm, secullumLigado, sincronizarPonto, statusPonto, totaisDoMes } from "@/lib/secullum";
 import IrPara from "@/components/IrPara";
+import BotaoEnviando from "@/components/BotaoEnviando";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 // Colunas do cálculo do Secullum que interessam para a folha (as outras ficam no Secullum).
@@ -80,7 +81,9 @@ export default async function Ponto({ searchParams }: { searchParams: Promise<{ 
 
   // Colunas do Secullum que aparecem em pelo menos um colaborador
   const colunasSec: string[] = [];
-  for (const t of totais.values()) for (const c of t.colunas) if (COLUNAS_FOLHA.test(c) && !colunasSec.includes(c)) colunasSec.push(c);
+  // só as colunas que têm algum valor no mês (zeradas como Abono2/3/4 ficam de fora)
+  const temValor = (v?: string) => !!v && !/^-?0*:?00$/.test(v.trim()) && v.trim() !== "";
+  for (const t of totais.values()) t.colunas.forEach((c, i) => { if (COLUNAS_FOLHA.test(c) && !colunasSec.includes(c) && [...totais.values()].some((x) => temValor(x.totais[x.colunas.indexOf(c)]))) colunasSec.push(c); });
   const valorSec = (fid: number, col: string) => { const t = totais.get(fid); if (!t) return "—"; const i = t.colunas.indexOf(col); return i >= 0 && t.totais[i] ? t.totais[i] : "—"; };
 
   const linhas = funcs.filter((f) => f.ativo || porFunc.has(f.id)).map((f) => {
@@ -132,7 +135,7 @@ export default async function Ponto({ searchParams }: { searchParams: Promise<{ 
                   <option value="62">Últimos 2 meses</option>
                 </select>
               </label>
-              <button className="btn">Buscar batidas agora</button>
+              <BotaoEnviando enviando="Buscando no Secullum… (pode levar até 1 minuto)">Buscar batidas agora</BotaoEnviando>
             </form>
           )}
         </div>
