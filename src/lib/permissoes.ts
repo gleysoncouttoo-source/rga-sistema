@@ -28,6 +28,7 @@ export const ABAS = [
   { id: "despesas-custo", nome: "Contas no custo", href: "/custos/despesas", modulo: "custos" },
   { id: "lucros", nome: "Lucros", href: "/lucros", modulo: "custos" },
   { id: "funcionarios", nome: "Colaboradores", href: "/funcionarios", modulo: "funcionarios" },
+  { id: "ponto", nome: "Cartão de ponto", href: "/funcionarios/ponto", modulo: "funcionarios" },
   { id: "historico", nome: "Histórico", href: "/historico", modulo: "historico" },
   { id: "usuarios", nome: "Usuários e perfis", href: "/usuarios", modulo: "usuarios" },
   { id: "apontar", nome: "Apontar produção", href: "/apontar", modulo: null },
@@ -43,7 +44,7 @@ export const GRUPOS_MENU: { nome: string; abas: string[] }[] = [
   { nome: "Compras", abas: ["compras"] },
   { nome: "Sambot", abas: ["sambot"] },
   { nome: "Financeiro", abas: ["financeiro", "custos", "despesas-custo", "lucros"] },
-  { nome: "Colaboradores", abas: ["funcionarios"] },
+  { nome: "Colaboradores", abas: ["funcionarios", "ponto"] },
   { nome: "Histórico", abas: ["historico"] },
   { nome: "Usuários e perfis", abas: ["usuarios"] },
 ];

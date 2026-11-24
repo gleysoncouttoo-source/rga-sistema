@@ -1,0 +1,13 @@
+// Todo dia às 20h (Vercel Cron): busca no Secullum as batidas dos últimos 7 dias e os totais do mês.
+import { NextResponse } from "next/server";
+import { secullumLigado, sincronizarPonto } from "@/lib/secullum";
+
+export const maxDuration = 60;
+
+export async function GET(req: Request) {
+  const segredo = process.env.CRON_SECRET;
+  if (!segredo || req.headers.get("authorization") !== `Bearer ${segredo}`) return NextResponse.json({ erro: "não autorizado" }, { status: 401 });
+  if (!secullumLigado()) return NextResponse.json({ ok: true, pulou: "Secullum não ligado" });
+  const r = await sincronizarPonto(7);
+  return NextResponse.json(r, { status: r.ok ? 200 : 500 });
+}
