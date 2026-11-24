@@ -10,8 +10,9 @@ import { dia } from "@/lib/datas";
 import { mesAtual, mesValido, nomeMes } from "@/lib/despesasCusto";
 import { NOME_ORIGEM, cartoes, hhmm, secullumLigado, sincronizarPonto, statusPonto, totaisDoMes } from "@/lib/secullum";
 import IrPara from "@/components/IrPara";
+import BotaoEnviando from "@/components/BotaoEnviando";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 // Colunas do cálculo do Secullum que interessam para a folha (as outras ficam no Secullum).
@@ -132,7 +133,7 @@ export default async function Ponto({ searchParams }: { searchParams: Promise<{ 
                   <option value="62">Últimos 2 meses</option>
                 </select>
               </label>
-              <button className="btn">Buscar batidas agora</button>
+              <BotaoEnviando enviando="Buscando no Secullum… (pode levar até 1 minuto)">Buscar batidas agora</BotaoEnviando>
             </form>
           )}
         </div>

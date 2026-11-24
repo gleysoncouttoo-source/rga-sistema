@@ -98,21 +98,29 @@ async function importarBatidas(s: Sessao, inicio: Date, fim: Date) {
   for (let a = inicio; a <= fim; a = somaDias(a, 31)) {
     const b = somaDias(a, 30) < fim ? somaDias(a, 30) : fim;
     const lista = await chamar<Record<string, unknown>[]>(s, `FonteDados?dataInicio=${chave(a)}&dataFim=${chave(b)}`);
+    const linhas = new Map<string, { secullumId: string; funcionarioId: number | null; secullumFuncId: number | null; cpf: string | null; pis: string | null; data: Date; hora: string; origem: number | null; tipo: number | null }>();
     for (const x of lista ?? []) {
       const sid = String(campo(x, "Id") ?? "");
       const data = String(campo(x, "Data") ?? "").slice(0, 10);
       const hora = String(campo(x, "Hora") ?? "").slice(0, 5);
       if (!sid || !/^\d{4}-\d{2}-\d{2}$/.test(data) || !/^\d{1,2}:\d{2}$/.test(hora)) continue;
-      total++;
       const secF = Number(campo(x, "FuncionarioId")) || null;
       const cpf = so(campo(x, "FuncionarioCpf")) || null;
       const pis = so(campo(x, "FuncionarioPis")) || null;
       const funcionarioId = (secF && porSec.get(secF)) || (cpf && porCpf.get(cpf)) || (pis && porPis.get(pis)) || null;
-      const dados = { funcionarioId, secullumFuncId: secF, cpf, pis, data: dia(data), hora: hora.padStart(5, "0"), origem: origemNum(campo(x, "Origem")), tipo: tipoNum(campo(x, "Tipo")) };
-      const antes = await db.batidaPonto.findUnique({ where: { secullumId: sid }, select: { id: true } });
-      await db.batidaPonto.upsert({ where: { secullumId: sid }, create: { secullumId: sid, ...dados }, update: dados });
-      if (!antes) novas++;
+      linhas.set(sid, { secullumId: sid, funcionarioId, secullumFuncId: secF, cpf, pis, data: dia(data), hora: hora.padStart(5, "0"), origem: origemNum(campo(x, "Origem")), tipo: tipoNum(campo(x, "Tipo")) });
     }
+    total += linhas.size;
+    // tudo de uma vez (rápido): só grava as novas e corrige as que mudaram
+    const ids = [...linhas.keys()];
+    const existentes = new Map<string, { funcionarioId: number | null; tipo: number | null }>();
+    for (let i = 0; i < ids.length; i += 1000) {
+      for (const e of await db.batidaPonto.findMany({ where: { secullumId: { in: ids.slice(i, i + 1000) } }, select: { secullumId: true, funcionarioId: true, tipo: true } })) existentes.set(e.secullumId, e);
+    }
+    const criar = [...linhas.values()].filter((l) => !existentes.has(l.secullumId));
+    for (let i = 0; i < criar.length; i += 1000) novas += (await db.batidaPonto.createMany({ data: criar.slice(i, i + 1000), skipDuplicates: true })).count;
+    const mudou = [...linhas.values()].filter((l) => { const e = existentes.get(l.secullumId); return e && (e.funcionarioId !== l.funcionarioId || e.tipo !== l.tipo); });
+    for (const l of mudou) await db.batidaPonto.update({ where: { secullumId: l.secullumId }, data: { funcionarioId: l.funcionarioId, tipo: l.tipo, origem: l.origem, hora: l.hora } });
   }
   return { total, novas };
 }
@@ -123,14 +131,14 @@ async function importarTotais(s: Sessao, mes: string) {
   const ini = `${mes}-01`, fim = chave(new Date(Date.UTC(ano, m, 0, 12)));
   const funcs = await db.funcionario.findMany({ where: { ativo: true, secullumId: { not: null }, OR: [{ cpf: { not: null } }, { pis: { not: null } }] } });
   let ok = 0;
-  for (const f of funcs) {
+  await Promise.all(funcs.map(async (f) => {
     try {
       const r = await chamar<{ Colunas?: string[]; Totais?: string[]; Linhas?: unknown[]; colunas?: string[]; totais?: string[]; linhas?: unknown[] }>(s, "Calcular", { FuncionarioCpf: f.cpf ?? "", FuncionarioPis: f.pis ?? "", DataInicial: ini, DataFinal: fim });
       const d = { colunas: JSON.stringify(r?.Colunas ?? r?.colunas ?? []), totais: JSON.stringify(r?.Totais ?? r?.totais ?? []), linhas: JSON.stringify(r?.Linhas ?? r?.linhas ?? []) };
       await db.pontoTotal.upsert({ where: { funcionarioId_mes: { funcionarioId: f.id, mes } }, create: { funcionarioId: f.id, mes, ...d }, update: d });
       ok++;
     } catch { /* um funcionário com erro não para os outros */ }
-  }
+  }));
   return ok;
 }
 
@@ -157,22 +165,27 @@ export type ResultadoSync = { ok: boolean; mensagem: string };
 
 /** Busca tudo: funcionários, batidas dos últimos `dias` dias e os totais do mês atual (e do anterior nos 5 primeiros dias). */
 export async function sincronizarPonto(dias = 7): Promise<ResultadoSync> {
+  let etapa = "entrar no Secullum";
+  await salvarStatus(false, "Buscando agora… se esta mensagem ficar, a busca parou no meio (tempo esgotado). Tente de novo com um período menor.");
   try {
     const s = await entrar();
+    etapa = "trazer os funcionários";
     const f = await importarFuncionarios(s);
     const hoje = dia();
+    etapa = "trazer as batidas";
     const b = await importarBatidas(s, somaDias(hoje, -(dias - 1)), hoje);
     const mes = chave(hoje).slice(0, 7);
     const inicioAnterior = dia(chave(somaDias(dia(`${mes}-01`), -1)).slice(0, 7) + "-01");
     let af = 0;
     try { af = await importarAfastamentos(s, inicioAnterior, somaDias(hoje, 60)); } catch { /* sem afastamentos não para o resto */ }
+    etapa = "trazer o cálculo do mês";
     let t = await importarTotais(s, mes);
     if (hoje.getUTCDate() <= 10 || dias > 31) t += await importarTotais(s, chave(inicioAnterior).slice(0, 7));
     const msg = `${f.total} funcionário(s) no Secullum, ${f.ligados} ligado(s) aos colaboradores. ${b.total} batida(s) nos últimos ${dias} dias, ${b.novas} nova(s). ${af} afastamento(s). Cálculo do mês de ${t} pessoa(s).`;
     await salvarStatus(true, msg);
     return { ok: true, mensagem: msg };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = `Erro ao ${etapa}: ${e instanceof Error ? e.message : String(e)}`;
     await salvarStatus(false, msg);
     return { ok: false, mensagem: msg };
   }
