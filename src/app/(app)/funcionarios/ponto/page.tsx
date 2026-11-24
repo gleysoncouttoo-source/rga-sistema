@@ -44,6 +44,7 @@ async function acao(form: FormData) {
       fid = Number(destino);
       if (!fid) ir("erro", "Escolha o colaborador na lista.");
       const f = await db.funcionario.findUniqueOrThrow({ where: { id: fid } });
+      await db.funcionario.updateMany({ where: { secullumId: sid, NOT: { id: fid } }, data: { secullumId: null } });
       await db.funcionario.update({ where: { id: fid }, data: { secullumId: sid, pis: f.pis ?? p.pis, cpf: f.cpf ?? p.cpf } });
       await auditar(u.nome, "ligou colaborador ao ponto", `${p.nome} → ${f.nome}`);
     }

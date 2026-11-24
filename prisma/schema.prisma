@@ -87,7 +87,7 @@ model Funcionario {
   beneficios        Float? // benefícios e outros custos fixos por mês (VT, VR, plano...)
   pinHash           String? // PIN para apontar produção pelo celular
   pis               String? // Nº PIS (vem do relógio de ponto Secullum)
-  secullumId        Int?               @unique // id do funcionário no Secullum Ponto Web
+  secullumId        Int? // id do funcionário no Secullum Ponto Web (um por colaborador, conferido no código)
   batidas           BatidaPonto[]
   pontoTotais       PontoTotal[]
   ativo             Boolean            @default(true)
