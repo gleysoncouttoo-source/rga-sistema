@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { auditar, exigir } from "@/lib/auth";
 import { pode } from "@/lib/permissoes";
 import { custoHora, lerConfig } from "@/lib/config";
+import { custosHoraReais } from "@/lib/folha";
 import { brl, num, pecasHora } from "@/lib/formato";
 import { custosUnitarios, lerCfgLucro, tempoTxt } from "@/lib/custoProduto";
 import { nomeMes } from "@/lib/despesasCusto";
@@ -22,14 +23,16 @@ export default async function Custos() {
   const u = await exigir("custos");
   const cfg = await lerConfig();
   const desde = new Date(Date.now() - 30 * 86_400_000);
-  const [etapas, funcs, aps] = await Promise.all([
+  const [etapas, funcs, aps, reais] = await Promise.all([
     db.etapa.findMany({ orderBy: { ordem: "asc" }, include: { operacoes: { where: { ativo: true }, orderBy: { nome: "asc" } } } }),
     db.funcionario.findMany({ where: { ativo: true, salario: { not: null } } }),
     db.apontamento.findMany({ where: { data: { gte: desde } } }),
+    custosHoraReais(),
   ]);
 
   // custo da hora médio de quem trabalha em cada setor (ou da fábrica, se o setor não tiver ninguém)
-  const horas = funcs.map((f) => ({ setor: f.setor, ch: custoHora(f.salario, cfg, f)! }));
+  // custo real da hora da última folha fechada (cartão de ponto); sem folha fechada, salário ÷ horas/mês
+  const horas = funcs.map((f) => ({ setor: f.setor, ch: reais.get(f.id) ?? custoHora(f.salario, cfg, f)! }));
   const media = (l: number[]) => (l.length ? l.reduce((a, b) => a + b, 0) / l.length : null);
   const chFabrica = media(horas.map((h) => h.ch));
   const chSetor = (s: string) => media(horas.filter((h) => h.setor === s).map((h) => h.ch)) ?? chFabrica;
@@ -67,7 +70,7 @@ export default async function Custos() {
           {edita && <div className="inteiro"><button className="btn">Salvar parâmetros</button></div>}
         </form>
         <p className="suave" style={{ marginBottom: 0 }}>
-          Custo da hora = (salário × (1 + encargos do colaborador) + benefícios) ÷ horas/mês. Os encargos de cada um ficam na ficha do colaborador. Custo por peça = custo da hora ÷ peças por hora.
+          Custo da hora = custo real da última folha fechada (salário, extras, encargos e benefícios ÷ horas batidas no ponto). Quem ainda não tem folha fechada: (salário × (1 + encargos do colaborador) + benefícios) ÷ horas/mês. Os encargos de cada um ficam na ficha do colaborador. Custo por peça = custo da hora ÷ peças por hora.
           Quando a folha de pagamento entrar no sistema, os encargos e as provisões de 13º, férias e rescisão serão calculados por ela.
         </p>
       </div>

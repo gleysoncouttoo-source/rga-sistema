@@ -34,13 +34,14 @@ export { numeroWhats } from "./whatsapp";
 
 type Anexo = { nome: string; tipo: string; dados: Uint8Array };
 
-export async function enviarEmail(para: string, assunto: string, texto: string, anexo: Anexo) {
+export async function enviarEmail(para: string, assunto: string, texto: string, anexo: Anexo | Anexo[]) {
+  const anexos = Array.isArray(anexo) ? anexo : [anexo];
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       from: process.env.EMAIL_REMETENTE, to: [para], subject: assunto, text: texto,
-      attachments: [{ filename: anexo.nome, content: Buffer.from(anexo.dados).toString("base64") }],
+      attachments: anexos.map((a) => ({ filename: a.nome, content: Buffer.from(a.dados).toString("base64") })),
     }),
   });
   if (!r.ok) throw new Error(`E-mail não foi: ${(await r.text()).slice(0, 200)}`);

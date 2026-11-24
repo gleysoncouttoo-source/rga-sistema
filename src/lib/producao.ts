@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { custoHora, lerConfig } from "./config";
 import { avisarDepois } from "./notificacoes";
+import { custosHoraReais } from "./folha";
 
 export type ResultadoApontamento = {
   apontamentoId: number;
@@ -15,13 +16,15 @@ export async function registrarApontamento(p: {
   funcionarioId: number; operacaoId: number; quantidade: number; refugo: number; minutos: number;
   itemId?: number; passoId?: number; loteId?: number; inicio?: Date; fim?: Date; usuario?: string | null;
 }): Promise<ResultadoApontamento> {
-  const [cfg, func, op] = await Promise.all([
+  const [cfg, func, op, reais] = await Promise.all([
     lerConfig(),
     db.funcionario.findUniqueOrThrow({ where: { id: p.funcionarioId } }),
     db.operacao.findUniqueOrThrow({ where: { id: p.operacaoId } }),
+    custosHoraReais(),
   ]);
   const segPorPeca = (p.minutos * 60) / p.quantidade;
-  const ch = custoHora(func.salario, cfg, func);
+  // custo real da hora da última folha fechada (pelo ponto); sem folha fechada, salário ÷ horas/mês
+  const ch = reais.get(func.id) ?? custoHora(func.salario, cfg, func);
   const custoPorPeca = ch != null ? (ch * p.minutos) / 60 / p.quantidade : null;
 
   const ap = await db.apontamento.create({

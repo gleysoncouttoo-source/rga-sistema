@@ -21,27 +21,27 @@ model Perfil {
 }
 
 model Usuario {
-  id            Int          @id @default(autoincrement())
+  id            Int            @id @default(autoincrement())
   nome          String
-  email         String       @unique
+  email         String         @unique
   senhaHash     String
   perfilId      Int
-  perfil        Perfil       @relation(fields: [perfilId], references: [id])
+  perfil        Perfil         @relation(fields: [perfilId], references: [id])
   setor         String? // setor do qual recebe lembretes
   whatsapp      String?
-  ativo         Boolean      @default(true)
-  tentativas    Int          @default(0)
+  ativo         Boolean        @default(true)
+  tentativas    Int            @default(0)
   bloqueadoAte  DateTime?
-  funcionarioId Int?         @unique
-  funcionario   Funcionario? @relation(fields: [funcionarioId], references: [id])
+  funcionarioId Int?           @unique
+  funcionario   Funcionario?   @relation(fields: [funcionarioId], references: [id])
   abasOcultas   String? // JSON: abas que este login escolheu esconder do menu
   abasLiberadas String? // JSON: abas que o diretor liberou para este login (vazio = todas que o perfil permite)
-  pendente      Boolean      @default(false) // criou a conta pela tela Criar conta e espera liberação
+  pendente      Boolean        @default(false) // criou a conta pela tela Criar conta e espera liberação
   cargoPedido   String? // cargo que a pessoa informou ao criar a conta
   notificacoes  String? // JSON: avisos no celular que este login escolheu receber (vazio = todos da sua área)
   sessoes       Sessao[]
   aparelhos     AparelhoPush[]
-  criadoEm      DateTime     @default(now())
+  criadoEm      DateTime       @default(now())
 }
 
 // Celular ou computador que aceitou receber avisos (notificação push) de um login
@@ -86,6 +86,12 @@ model Funcionario {
   encargosPct       Float? // encargos e provisões deste colaborador (% sobre o salário); vazio = % padrão da tela de Custos
   beneficios        Float? // benefícios e outros custos fixos por mês (VT, VR, plano...)
   pinHash           String? // PIN para apontar produção pelo celular
+  pis               String? // Nº PIS (vem do relógio de ponto Secullum)
+  secullumId        Int? // id do funcionário no Secullum Ponto Web (um por colaborador, conferido no código)
+  batidas           BatidaPonto[]
+  pontoTotais       PontoTotal[]
+  afastamentos      PontoAfastamento[]
+  folhas            FolhaPessoa[]
   ativo             Boolean            @default(true)
   observacoes       String?
   usuario           Usuario?
@@ -261,7 +267,7 @@ model Reserva {
 }
 
 model Fornecedor {
-  id                Int              @id @default(autoincrement())
+  id                Int                 @id @default(autoincrement())
   nome              String
   chavePix          String?
   banco             String? // dados para transferência
@@ -269,9 +275,9 @@ model Fornecedor {
   contato           String?
   telefone          String?
   email             String?
-  prazoPagamento    String           @default("28") // dias após a compra, uma parcela por número: "28" ou "28/42/56"
-  prazoEntregaDias  Int              @default(7) // dias entre a compra e a chegada
-  ativo             Boolean          @default(true)
+  prazoPagamento    String              @default("28") // dias após a compra, uma parcela por número: "28" ou "28/42/56"
+  prazoEntregaDias  Int                 @default(7) // dias entre a compra e a chegada
+  ativo             Boolean             @default(true)
   observacao        String?
   // cadastro completo (18/11)
   razaoSocial       String?
@@ -294,7 +300,7 @@ model Fornecedor {
   boletos           ContaPagar[]
   ofertas           FornecedorItem[]
   cotacoes          CotacaoFornecedor[]
-  criadoEm          DateTime         @default(now())
+  criadoEm          DateTime            @default(now())
 }
 
 // O que cada fornecedor vende: preço, prazo de pagamento, prazo de entrega e compra mínima de cada matéria-prima.
@@ -441,6 +447,7 @@ model ContaPagar {
   pagoEm         DateTime?
   // entra no custo dos produtos do mês? null = segue a regra da categoria (Custos → Contas no custo)
   noCusto        Boolean?
+  folhaMes       String? // salário com o valor líquido da folha fechada deste mês (AAAA-MM): não volta para o salário do cadastro
   criadoEm       DateTime         @default(now())
 
   @@unique([recorrenteId, competencia])
@@ -816,4 +823,104 @@ model WhatsMidia {
   waMediaEm DateTime?
   usuario   String?
   criadoEm  DateTime  @default(now())
+}
+
+// ───────────── Cartão de ponto (Secullum Ponto Web) ─────────────
+// Cada batida do relógio, trazida pela integração externa do Secullum.
+model BatidaPonto {
+  id             Int          @id @default(autoincrement())
+  secullumId     String       @unique // Id da batida no Secullum (não duplica ao buscar de novo)
+  funcionarioId  Int?
+  funcionario    Funcionario? @relation(fields: [funcionarioId], references: [id])
+  secullumFuncId Int?
+  cpf            String?
+  pis            String?
+  data           DateTime // dia (meio-dia UTC)
+  hora           String // "HH:mm"
+  origem         Int? // 1 relógio, 2 incluída à mão, 6 app...
+  tipo           Int? // 0 original, 1 manual, 2 pré-assinalada
+  criadoEm       DateTime     @default(now())
+
+  @@index([data])
+  @@index([funcionarioId, data])
+}
+
+// Funcionário que existe no Secullum mas ainda não foi ligado a um colaborador do sistema.
+model PontoPessoa {
+  secullumId   Int       @id
+  nome         String
+  cpf          String?
+  pis          String?
+  numeroFolha  String?
+  admissao     DateTime?
+  demissao     DateTime?
+  departamento String?
+  funcao       String?
+  horario      String?
+  dados        String? // ficha completa que veio do Secullum (JSON)
+  atualizadoEm DateTime  @updatedAt
+}
+
+// Férias, atestados, licenças... lançados no Secullum.
+model PontoAfastamento {
+  chave         String       @id // cpf|inicio|fim|justificativa
+  funcionarioId Int?
+  funcionario   Funcionario? @relation(fields: [funcionarioId], references: [id])
+  cpf           String?
+  pis           String?
+  inicio        DateTime
+  fim           DateTime
+  motivo        String?
+  justificativa String?
+  atualizadoEm  DateTime     @updatedAt
+
+  @@index([inicio])
+}
+
+// Folha do mês: aberta (prévia que muda com o ponto) ou fechada (valores congelados e enviados ao contador).
+model FolhaMes {
+  mes         String        @id // AAAA-MM
+  status      String        @default("aberta")
+  fechadaEm   DateTime?
+  fechadaPor  String?
+  enviadaEm   DateTime?
+  enviadaPara String?
+  observacao  String?
+  pessoas     FolhaPessoa[]
+}
+
+model FolhaPessoa {
+  id            Int         @id @default(autoincrement())
+  mes           String
+  folha         FolhaMes    @relation(fields: [mes], references: [mes], onDelete: Cascade)
+  funcionarioId Int
+  funcionario   Funcionario @relation(fields: [funcionarioId], references: [id])
+  salario       Float
+  minutosPonto  Float
+  eventos       String // JSON: [{ codigo, nome, referencia, provento, desconto }]
+  proventos     Float
+  descontos     Float
+  bruto         Float
+  encargos      Float
+  beneficios    Float
+  custoTotal    Float
+  custoHoraReal Float?
+  afastamentos  String?
+  liquido       Float? // valor líquido que o contador devolveu (vai para a conta de salário)
+
+  @@unique([mes, funcionarioId])
+}
+
+// Totais do mês calculados pelo próprio Secullum (Normais, Extras, Faltas, Atrasos...), como em Relatórios → Cálculos.
+model PontoTotal {
+  id            Int         @id @default(autoincrement())
+  funcionarioId Int
+  funcionario   Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
+  mes           String // "2026-11"
+  colunas       String // JSON: ["Data", "Normais", "Extras", ...]
+  linhas        String? // JSON: [{ Key: "2026-11-03T00:00:00", Value: ["03/11/2026 - Ter", "08:48", ...] }]
+  totais        String // JSON: ["", "176:00", "04:30", ...]
+  atualizadoEm  DateTime    @updatedAt
+
+  @@unique([funcionarioId, mes])
 }

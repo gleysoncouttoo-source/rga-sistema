@@ -5,6 +5,10 @@ import { pode } from "@/lib/permissoes";
 import { lerConfig, custoHora } from "@/lib/config";
 import { brl, dataHora, num } from "@/lib/formato";
 import FormFuncionario from "@/components/FormFuncionario";
+import Link from "next/link";
+import { dia } from "@/lib/datas";
+import { mesAtual } from "@/lib/despesasCusto";
+import { cartoes, hhmm } from "@/lib/secullum";
 
 export default async function Editar({
   params, searchParams,
@@ -22,6 +26,9 @@ export default async function Editar({
   const verSal = pode(u.permissoes, "funcionarios", "ver_salario");
   const podeEditar = pode(u.permissoes, "funcionarios", "editar");
   const ch = custoHora(f.salario, cfg, f);
+  const mes = mesAtual();
+  const [a, m] = mes.split("-").map(Number);
+  const ponto = (await cartoes(dia(`${mes}-01`), new Date(Date.UTC(a, m, 0, 12)), f.id)).get(f.id);
   return (
     <>
       <h1>{f.nome}</h1>
@@ -31,6 +38,12 @@ export default async function Editar({
         <div className="grade">
           <div className="kpi"><div className="r">Salário</div><div className="v">{brl(f.salario)}</div></div>
           <div className="kpi"><div className="r">Custo da hora</div><div className="v">{brl(ch)}</div><div className="r">{cfg.horasMes} h/mês · encargos {num(f.encargosPct ?? cfg.encargosPct)}%{f.encargosPct == null ? " (padrão)" : ""}{f.beneficios ? ` + ${brl(f.beneficios)} benefícios` : ""}</div></div>
+        </div>
+      )}
+      {(f.secullumId || ponto) && (
+        <div className="grade">
+          <div className="kpi"><div className="r">Horas no ponto este mês</div><div className="v">{hhmm(ponto?.minutos ?? 0)}</div><div className="r">{ponto?.dias.length ?? 0} dia(s) com batida</div></div>
+          <div className="kpi"><div className="r">Batida faltando</div><div className="v">{ponto?.incompletos ?? 0}</div><div className="r"><Link href={`/funcionarios/ponto?f=${f.id}#cartao`}>Ver cartão de ponto</Link></div></div>
         </div>
       )}
       <div className="card">
