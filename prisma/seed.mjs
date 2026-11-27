@@ -3,6 +3,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { carregarFechaduras } from "./fechaduras.mjs";
+import { aplicarPlanilha2026_11 } from "./planilha-2026-11.mjs";
 import { carregarRoteiros } from "./roteiros.mjs";
 import { carregarFotos } from "./fotos.mjs";
 
@@ -114,6 +115,7 @@ async function main() {
   }
   for (const nome of ["Bradesco", "Santander"]) await prisma.contaBancaria.upsert({ where: { nome }, update: {}, create: { nome } });
   await carregarFechaduras(prisma);
+  await aplicarPlanilha2026_11(prisma);
   await carregarRoteiros(prisma);
   await carregarFotos(prisma);
   // aba Fornecedores: item que já tem fornecedor aparece na lista dele (só cria o que falta)
