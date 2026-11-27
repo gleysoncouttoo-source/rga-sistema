@@ -26,6 +26,8 @@ export function precoPlanilha(sig, esp, acab, mod) {
 const br = (n) => (n == null ? null : String(n).replace(".", ","));
 
 export async function aplicarPlanilha2026_11(prisma) {
+  // na Vercel só aplica na publicação de verdade (main), nunca na prévia de um PR
+  if (process.env.VERCEL_ENV && process.env.VERCEL_ENV !== "production") return;
   const feito = await prisma.configuracao.findUnique({ where: { chave: "planilhaCustosAplicada" } });
   if (feito?.valor === VERSAO) return;
   const log = [];
