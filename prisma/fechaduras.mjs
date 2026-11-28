@@ -1,11 +1,13 @@
 // Estrutura das fechaduras mecânicas, da planilha "Tabela de Custos - Fechadura Mecânica RGA" (enviada em 06/11/2026).
+// Preços atualizados pela "Tabela Atualizada 11.2026" (27/11/2026), ver planilha-2026-11.mjs.
 // Só cria o que ainda não existe (pelo código), então pode rodar várias vezes sem apagar estoque ou preços alterados.
+import { FATOR_VENDA } from "./planilha-2026-11.mjs";
 
 const MP = [
   // código, nome, unidade, preço
-  ["MP-ACO-9", "Aço (R$ 9/kg)", "kg", 9],
-  ["MP-ACO-10", "Aço (R$ 10/kg)", "kg", 10],
-  ["MP-ZAMAC", "Zamac", "kg", 32],
+  ["MP-ACO-9", "Aço (R$ 9,63/kg)", "kg", 9.63],
+  ["MP-ACO-10", "Aço (R$ 10,70/kg)", "kg", 10.7],
+  ["MP-ZAMAC", "Zamac", "kg", 36],
 ];
 
 // peças fabricadas: código, nome, matéria-prima, peso em kg por peça
@@ -66,7 +68,7 @@ const COMUM_INT = [
 ];
 
 // corpos (conjuntos montados): código, nome, componentes
-const CORPOS = [
+export const CORPOS = [
   ["CJ-EXT", "Corpo fechadura externa", [
     ["PC-TESTA", 1], ["PC-CTESTA", 1], ["PC-CAIXA", 1], ["PC-TAMPA", 1], ["PC-CAD-TESTA", 2], ["PC-CAD-CAIXA", 4],
     ["PC-TRAVA-TRINCO", 1], ["PC-TRAVA-REV", 1], ["PC-TRAVA-CIL", 2], ["PC-ALAV-TRINCO", 1], ["PC-CHAVE", 2], ["PC-ESPELHO-ACO", 2],
@@ -80,12 +82,12 @@ const CORPOS = [
 ];
 
 // espelhos e maçanetas: custo informado na planilha (estrutura de matéria-prima ainda não cadastrada)
-const ESPELHOS = { "400LO": 1.75, "403LO": 1.85, "400PT": 1.4, "403PT": 1.65 };
-const MACANETAS = {
+export const ESPELHOS = { "400LO": 1.75, "403LO": 1.85, "400PT": 1.4, "403PT": 1.65 };
+export const MACANETAS = {
   LO: { 900: 3.97, 902: 5.35, 904: 4.75, 905: 6.98 },
   PT: { 900: 3.77, 902: 5.15, 904: 4.55, 905: 6.53 },
 };
-const LINHAS = [["EXT", "Externa", "CJ-EXT"], ["INT", "Interna", "CJ-INT"], ["WC", "Banheiro", "CJ-WC"]];
+export const LINHAS = [["EXT", "Externa", "CJ-EXT"], ["INT", "Interna", "CJ-INT"], ["WC", "Banheiro", "CJ-WC"]];
 
 export async function carregarFechaduras(prisma) {
   const id = {};
@@ -118,10 +120,10 @@ export async function carregarFechaduras(prisma) {
   }
   for (const [sig, nomeLinha, corpo] of LINHAS) for (const esp of ["400", "403"]) for (const acab of ["LO", "PT"]) for (const mod of [900, 902, 904, 905]) {
     const codigo = `FM-${sig}${esp}${acab}${mod}`;
-    // mesma conta da aba "Valor Fechaduras": custo × 2,1 (imposto, energia, frete, MO, lucro) + 8%
+    // mesma conta da aba "Valor Fechaduras": custo × 2,0 (imposto 20%, energia 20%, frete 10%, MO 20%, lucro 30%) + 8%
     const custo = await custoMaterial(prisma, [id[corpo], id[`ESP-${esp}${acab}`], id[`MAC-${mod}${acab}`]]);
     const novo = await item(codigo, { nome: `Fechadura ${nomeLinha} ${esp} ${acab} maç. ${mod}`, tipo: "produto", origem: "fabricado", diasFabricacao: 1, setor: "Montagem",
-      precoVenda: Math.round(custo * 2.1 * 1.08 * 100) / 100 });
+      precoVenda: Math.round(custo * FATOR_VENDA * 1.08 * 100) / 100 });
     await estrutura(codigo, [[corpo, 1], [`ESP-${esp}${acab}`, 1], [`MAC-${mod}${acab}`, 1]], novo);
   }
 
