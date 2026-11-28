@@ -2,11 +2,10 @@
 // Roda uma única vez (marca em Configuracao "planilhaCustosAplicada"), então não desfaz o que for alterado depois no sistema.
 // - preço da matéria-prima: aço 9 → 9,63/kg, aço 10 → 10,70/kg, zamac 32 → 36/kg (entra no histórico de preços)
 // - componentes dos 3 corpos conferidos com a aba "Fechaduras" (só acerta quantidade e põe o que faltar; não tira nada)
-// - preço de venda das 48 fechaduras pela aba "Valor Fechaduras" com mão de obra 20%:
-//   (corpo + espelho + maçaneta) × 2,0 (imposto 20% + energia 20% + frete 10% + MO 20% + lucro 30%) + 8%
-import { CORPOS, ESPELHOS, MACANETAS, LINHAS } from "./fechaduras.mjs";
+// - preço de venda NÃO muda (fica o do site). Se uma prévia já tinha trocado, volta ao valor de antes.
+import { CORPOS, ESPELHOS, MACANETAS } from "./fechaduras.mjs";
 
-const VERSAO = "2026-11";
+const VERSAO = "2026-11b"; // "b": preço de venda fica o do site (pedido de 28/11)
 const QUEM = "Planilha Tabela Atualizada 11.2026";
 
 const MP = [
@@ -63,14 +62,14 @@ export async function aplicarPlanilha2026_11(prisma) {
     }
   }
 
-  for (const [sig] of LINHAS) for (const esp of ["400", "403"]) for (const acab of ["LO", "PT"]) for (const mod of [900, 902, 904, 905]) {
-    const it = await porCodigo(`FM-${sig}${esp}${acab}${mod}`);
-    if (!it) continue;
-    const preco = precoPlanilha(sig, esp, acab, mod);
-    if (it.precoVenda !== preco) {
-      await prisma.item.update({ where: { id: it.id }, data: { precoVenda: preco } });
-      alt(it, "precoVenda", it.precoVenda, preco);
-    }
+  // preço de venda: volta o de antes onde a primeira versão desta atualização trocou (e ninguém mexeu depois)
+  const trocas = await prisma.alteracao.findMany({ where: { usuario: QUEM, tabela: "Item", campo: "precoVenda" }, orderBy: { id: "asc" } });
+  const num = (t) => (t == null ? null : Number(String(t).replace(",", ".")));
+  for (const a of trocas) {
+    const it = await prisma.item.findUnique({ where: { id: Number(a.registroId) } });
+    if (!it || it.precoVenda !== num(a.depois)) continue;
+    await prisma.item.update({ where: { id: it.id }, data: { precoVenda: num(a.antes) } });
+    alt(it, "precoVenda", it.precoVenda, num(a.antes));
   }
 
   if (log.length) await prisma.alteracao.createMany({ data: log });
